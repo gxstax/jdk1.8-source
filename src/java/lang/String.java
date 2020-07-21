@@ -567,6 +567,7 @@ public final class String
      * @param  buffer
      *         A {@code StringBuffer}
      */
+    // StringBuffer 为参数的构造方法
     public String(StringBuffer buffer) {
         synchronized(buffer) {
             this.value = Arrays.copyOf(buffer.getValue(), buffer.length());
@@ -588,6 +589,7 @@ public final class String
      *
      * @since  1.5
      */
+    // StringBuilder 为参数的构造方法
     public String(StringBuilder builder) {
         this.value = Arrays.copyOf(builder.getValue(), builder.length());
     }
@@ -966,6 +968,7 @@ public final class String
      * @see  #equalsIgnoreCase(String)
      */
     public boolean equals(Object anObject) {
+        // 对象引用相同直接返回 true
         if (this == anObject) {
             return true;
         }
