@@ -111,10 +111,11 @@ import java.util.regex.PatternSyntaxException;
 public final class String
     implements java.io.Serializable, Comparable<String>, CharSequence {
     /** The value is used for character storage. */
-    // 用于存储字符串的值
+    // 用于存储字符串的值 String 内部实际存储结构为 char 数组
     private final char value[];
 
     /** Cache the hash code for the string */
+    // 缓存字符串的 hash code
     private int hash; // Default to 0
 
     /** use serialVersionUID from JDK 1.0.2 for interoperability */
@@ -149,6 +150,7 @@ public final class String
      * @param  original
      *         A {@code String}
      */
+    // String 为参数的构造方法
     public String(String original) {
         this.value = original.value;
         this.hash = original.hash;
@@ -163,6 +165,7 @@ public final class String
      * @param  value
      *         The initial value of the string
      */
+    // char[] 为参数构造方法
     public String(char value[]) {
         this.value = Arrays.copyOf(value, value.length);
     }
