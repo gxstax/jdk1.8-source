@@ -967,19 +967,30 @@ public final class String
      * @see  #compareTo(String)
      * @see  #equalsIgnoreCase(String)
      */
+    /**
+     * String 类型重写了 Object 中的 equals() 方法，
+     * equals() 方法需要传递一个 Object 类型的参数值，
+     * 在比较时会先通过 instanceof 判断是否为 String 类型，
+     * 如果不是则会直接返回 false，
+     **/
     public boolean equals(Object anObject) {
         // 对象引用相同直接返回 true
         if (this == anObject) {
             return true;
         }
+        // 判断需要对比的值是否为 String 类型，如果不是则直接返回 false
+        // 类似于快速失败
         if (anObject instanceof String) {
             String anotherString = (String)anObject;
             int n = value.length;
             if (n == anotherString.value.length) {
+                // 把两个字符串都转换为 char 数组对比
                 char v1[] = value;
                 char v2[] = anotherString.value;
                 int i = 0;
+                // 循环比对两个字符串的每一个字符
                 while (n-- != 0) {
+                    // 其中有一个字符不想等，则两个字符串不等，直接返回 false
                     if (v1[i] != v2[i])
                         return false;
                     i++;
@@ -1096,6 +1107,7 @@ public final class String
      *
      * @see  #equals(Object)
      */
+    // 忽略大小写比较两个字符串是否相等
     public boolean equalsIgnoreCase(String anotherString) {
         return (this == anotherString) ? true
                 : (anotherString != null)
