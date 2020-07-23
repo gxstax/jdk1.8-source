@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -107,7 +107,7 @@ public class SocketAdaptor
                             throw new ClosedChannelException();
                         long st = System.currentTimeMillis();
 
-                        int result = sc.poll(PollArrayWrapper.POLLCONN, to);
+                        int result = sc.poll(Net.POLLCONN, to);
                         if (result > 0 && sc.finishConnect())
                             break;
                         to -= System.currentTimeMillis() - st;
@@ -201,7 +201,7 @@ public class SocketAdaptor
                         if (!sc.isOpen())
                             throw new ClosedChannelException();
                         long st = System.currentTimeMillis();
-                        int result = sc.poll(PollArrayWrapper.POLLIN, to);
+                        int result = sc.poll(Net.POLLIN, to);
                         if (result > 0) {
                             if ((n = sc.read(bb)) != 0)
                                 return n;
@@ -321,12 +321,9 @@ public class SocketAdaptor
     }
 
     public void sendUrgentData(int data) throws IOException {
-        synchronized (sc.blockingLock()) {
-            if (!sc.isBlocking())
-                throw new IllegalBlockingModeException();
-            int n = sc.sendOutOfBandData((byte)data);
-            assert n == 1;
-        }
+        int n = sc.sendOutOfBandData((byte) data);
+        if (n == 0)
+            throw new IOException("Socket buffer full");
     }
 
     public void setOOBInline(boolean on) throws SocketException {

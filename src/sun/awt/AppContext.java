@@ -42,11 +42,13 @@ import java.util.Set;
 import java.util.HashSet;
 import java.beans.PropertyChangeSupport;
 import java.beans.PropertyChangeListener;
+import java.lang.ref.SoftReference;
 import sun.util.logging.PlatformLogger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * The AppContext is a table referenced by ThreadGroup which stores
@@ -230,7 +232,7 @@ public final class AppContext {
      * That creates both the new AppContext and its EventQueue.
      *
      * @param   threadGroup     The ThreadGroup for the new AppContext
-     * @see     SunToolkit
+     * @see     sun.awt.SunToolkit
      * @since   1.2
      */
     AppContext(ThreadGroup threadGroup) {
@@ -329,6 +331,20 @@ public final class AppContext {
                     while (context == null) {
                         threadGroup = threadGroup.getParent();
                         if (threadGroup == null) {
+                            // We've got up to the root thread group and did not find an AppContext
+                            // Try to get it from the security manager
+                            SecurityManager securityManager = System.getSecurityManager();
+                            if (securityManager != null) {
+                                ThreadGroup smThreadGroup = securityManager.getThreadGroup();
+                                if (smThreadGroup != null) {
+                                    /*
+                                     * If we get this far then it's likely that
+                                     * the ThreadGroup does not actually belong
+                                     * to the applet, so do not cache it.
+                                     */
+                                    return threadGroup2appContext.get(smThreadGroup);
+                                }
+                            }
                             return null;
                         }
                         context = threadGroup2appContext.get(threadGroup);
@@ -882,6 +898,23 @@ public final class AppContext {
             }
 
         });
+    }
+
+    public static <T> T getSoftReferenceValue(Object key,
+            Supplier<T> supplier) {
+
+        final AppContext appContext = AppContext.getAppContext();
+        SoftReference<T> ref = (SoftReference<T>) appContext.get(key);
+        if (ref != null) {
+            final T object = ref.get();
+            if (object != null) {
+                return object;
+            }
+        }
+        final T object = supplier.get();
+        ref = new SoftReference<>(object);
+        appContext.put(key, ref);
+        return object;
     }
 }
 

@@ -267,7 +267,7 @@ public class DSAKeyFactory extends KeyFactorySpi {
 
             } else if (key instanceof java.security.interfaces.DSAPrivateKey) {
                 // Check if key originates from this factory
-                if (key instanceof DSAPrivateKey) {
+                if (key instanceof sun.security.provider.DSAPrivateKey) {
                     return key;
                 }
                 // Convert key to spec

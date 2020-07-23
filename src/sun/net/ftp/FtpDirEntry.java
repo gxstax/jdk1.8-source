@@ -34,7 +34,7 @@ import java.util.HashMap;
  * time, owner and group of the file, although some of these could be unavailable
  * due to specific FTP server limitations.
  *
- * @see FtpDirParser
+ * @see sun.net.ftp.FtpDirParser
  * @since 1.7
  */
 public class FtpDirEntry {

@@ -64,7 +64,7 @@ import sun.security.action.GetPropertyAction;
  * standard Blit operation between the two SurfaceData objects.
  */
 public abstract class SurfaceDataProxy
-    implements DisplayChangedListener, SurfaceManager.FlushableCacheData
+    implements DisplayChangedListener, FlushableCacheData
 {
     private static boolean cachingAllowed;
     private static int defaultThreshold;

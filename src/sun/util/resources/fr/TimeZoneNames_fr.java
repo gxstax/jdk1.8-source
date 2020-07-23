@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,9 +48,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String ACT[] = new String[] {"Heure de l'Acre", "ACT",
                                      "Heure d'\u00e9t\u00e9 de l'Acre", "ACST",
                                      "Heure de l'Acre", "ACT"};
-        String ADELAIDE[] = new String[] {"Heure standard d'Australie centrale (Australie du sud)", "CST",
-                                          "Heure d'\u00E9t\u00E9 d'Australie centrale (Australie du sud)", "CST",
-                                          "Centre (Australie-M\u00E9ridionale)", "CT"};
+        String ADELAIDE[] = new String[] {"Heure standard d'Australie centrale (Australie du sud)", "ACST",
+                                          "Heure d'\u00E9t\u00E9 d'Australie centrale (Australie du sud)", "ACDT",
+                                          "Centre (Australie-M\u00E9ridionale)", "ACT"};
         String AGT[] = new String[] {"Heure D'Argentine", "ART",
                                      "Heure d'\u00e9t\u00e9 D'Argentine", "ARST",
                                      "Heure d'Argentine", "ART"} ;
@@ -72,12 +72,12 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String BDT[] = new String[] {"Heure du Bangladesh", "BDT",
                                      "Heure d'\u00e9t\u00e9 du Bangladesh", "BDST",
                                      "Heure du Bangladesh", "BDT"} ;
-        String BRISBANE[] = new String[] {"Heure standard d'Australie orientale (Queensland)", "EST",
-                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Queensland)", "EST",
-                                          "C\u00F4te Est (Queensland)", "ET"};
-        String BROKEN_HILL[] = new String[] {"Heure standard d'Australie centrale (Australie du sud/Nouvelle-Galles du sud)", "CST",
-                                             "Heure d'\u00E9t\u00E9 d'Australie centrale (Australie du sud/Nouvelle-Galles du sud)", "CST",
-                                             "Centre (Australie-M\u00E9ridionale/Nouvelle-Galles du Sud)", "CT"};
+        String BRISBANE[] = new String[] {"Heure standard d'Australie orientale (Queensland)", "AEST",
+                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Queensland)", "AEDT",
+                                          "C\u00F4te Est (Queensland)", "AET"};
+        String BROKEN_HILL[] = new String[] {"Heure standard d'Australie centrale (Australie du sud/Nouvelle-Galles du sud)", "ACST",
+                                             "Heure d'\u00E9t\u00E9 d'Australie centrale (Australie du sud/Nouvelle-Galles du sud)", "ACDT",
+                                             "Centre (Australie-M\u00E9ridionale/Nouvelle-Galles du Sud)", "ACT"};
         String BRT[] = new String[] {"Heure du Br\u00e9sil", "BRT",
                                      "Heure d'\u00e9t\u00e9 du Br\u00e9sil", "BRST",
                                      "Heure du Br\u00E9sil", "BRT"} ;
@@ -111,9 +111,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String CUBA[] = new String[] {"Heure standard de Cuba", "CST",
                                       "Heure d'\u00e9t\u00e9 de Cuba", "CDT",
                                       "Heure de Cuba", "CT"};
-        String DARWIN[] = new String[] {"Heure standard d'Australie centrale (Territoire du Nord)", "CST",
-                                        "Heure d'\u00E9t\u00E9 d'Australie centrale (Territoire du Nord)", "CST",
-                                        "Centre (Territoire du Nord)", "CT"};
+        String DARWIN[] = new String[] {"Heure standard d'Australie centrale (Territoire du Nord)", "ACST",
+                                        "Heure d'\u00E9t\u00E9 d'Australie centrale (Territoire du Nord)", "ACDT",
+                                        "Centre (Territoire du Nord)", "ACT"};
         String DUBLIN[] = new String[] {"Heure du m\u00e9ridien de Greenwich", "GMT",
                                         "Heure d'\u00e9t\u00e9 irlandaise", "IST",
                                         "Heure irlandaise", "IT"};
@@ -132,9 +132,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String EST[] = new String[] {"Heure normale de l'Est", "EST",
                                      "Heure avanc\u00e9e de l'Est", "EDT",
                                      "C\u00F4te Est", "ET"} ;
-        String EST_NSW[] = new String[] {"Heure normale de l'Est (Nouvelle-Galles du Sud)", "EST",
-                                         "Heure d'\u00E9t\u00E9 de l'Est (Nouvelle-Galles du Sud)", "EST",
-                                         "C\u00F4te Est (Nouvelle-Galles du Sud)", "ET"} ;
+        String EST_NSW[] = new String[] {"Heure normale de l'Est (Nouvelle-Galles du Sud)", "AEST",
+                                         "Heure d'\u00E9t\u00E9 de l'Est (Nouvelle-Galles du Sud)", "AEDT",
+                                         "C\u00F4te Est (Nouvelle-Galles du Sud)", "AET"} ;
         String FET[] = new String[] {"Heure d'Europe de l'Est UTC+3", "FET",
                                      "Heure d'\u00E9t\u00E9 d'Europe de l'Est UTC+3", "FEST",
                                      "Heure d'Europe de l'Est UTC+3", "FET"};
@@ -153,9 +153,6 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String GST[] = new String[] {"Heure normale du Golfe", "GST",
                                      "Heure avanc\u00e9e du Golfe", "GDT",
                                      "Golfe", "GT"} ;
-        String HAST[] = new String[] {"Heure normale d'Hawa\u00ef-Al\u00e9outiennes", "HAST",
-                                      "Heure avanc\u00e9e d'Hawa\u00ef-Al\u00e9outiennes", "HADT",
-                                      "Hawa\u00EF-Iles Al\u00E9outiennes", "HAT"} ;
         String HKT[] =  new String[] {"Heure de Hong Kong", "HKT",
                                       "Heure d'\u00e9t\u00e9 de Hong Kong", "HKST",
                                       "Heure de Hong-Kong", "HKT"};
@@ -165,6 +162,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String ICT[] = new String[] {"Heure d'Indochine", "ICT",
                                      "Heure d'\u00e9t\u00e9 d'Indochine", "ICST",
                                      "Heure d'Indochine", "ICT"} ;
+        String IRKT[] = new String[] {"Heure d'Irkutsk", "IRKT",
+                                      "Heure d'\u00e9t\u00e9 d'Irkutsk", "IRKST",
+                                      "Heure d'Irkutsk", "IRKT"};
         String IRT[] = new String[] {"Heure normale d'Iran", "IRST",
                                      "Heure avanc\u00e9e d'Iran", "IRDT",
                                      "Heure d'Iran", "IRT"} ;
@@ -177,15 +177,21 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String JST[] = new String[] {"Heure normale du Japon", "JST",
                                      "Heure avanc\u00e9e du Japon", "JDT",
                                      "Japon", "JT"} ;
+        String KRAT[] = new String[] {"Heure de Krasno\u00efarsk", "KRAT",
+                                      "Heure d'\u00e9t\u00e9 de Krasno\u00efarsk", "KRAST",
+                                      "Heure de Krasno\u00EFarsk", "KRAT"};
         String KST[] = new String[] {"Heure normale de Cor\u00e9e", "KST",
                                      "Heure avanc\u00e9e de Cor\u00e9e", "KDT",
                                      "Cor\u00E9e", "KT"} ;
         String LORD_HOWE[] = new String[] {"Heure standard de Lord Howe", "LHST",
-                                           "Heure d'\u00e9t\u00e9 de Lord Howe", "LHST",
+                                           "Heure d'\u00e9t\u00e9 de Lord Howe", "LHDT",
                                            "Heure de Lord Howe", "LHT"};
         String MHT[] = new String[] {"Heure des Iles Marshall", "MHT",
                                      "Heure d'\u00e9t\u00e9 des Iles Marshall", "MHST",
                                      "Heure des Iles Marshall", "MHT"};
+        String MMT[] = new String[] {"Heure de Myanmar", "MMT",
+                                     "Heure d'\u00e9t\u00e9 de Myanmar", "MMST",
+                                     "Heure de Myanmar", "MMT"};
         String MSK[] = new String[] {"Heure standard de Moscou", "MSK",
                                      "Heure avanc\u00e9e de Moscou", "MSD",
                                      "Moscou", "MT"};
@@ -231,20 +237,15 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String SGT[] = new String[] {"Heure de Singapour", "SGT",
                                      "Heure d'\u00e9t\u00e9 de Singapour", "SGST",
                                      "Heure de Singapour", "SGT"};
-        String SLST[] = new String[] {"Heure du m\u00e9ridien de Greenwich", "GMT",
-                                      "Heure d'\u00e9t\u00e9 de Sierra Leone", "SLST",
-                                      "Heure de Sierra Leone", "SLT"};
-        String TASMANIA[] = new String[] {"Heure standard d'Australie orientale (Tasmanie)", "EST",
-                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Tasmanie)", "EST",
-                                          "C\u00F4te Est (Tasmanie)", "ET"};
+        String TASMANIA[] = new String[] {"Heure standard d'Australie orientale (Tasmanie)", "AEST",
+                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Tasmanie)", "AEDT",
+                                          "C\u00F4te Est (Tasmanie)", "AET"};
         String TMT[] = new String[] {"Heure du Turkm\u00e9nistan", "TMT",
                                      "Heure d'\u00e9t\u00e9 du Turkm\u00e9nistan", "TMST",
                                      "Heure du Turkm\u00E9nistan", "TMT"} ;
         String ULAT[]= new String[] {"Heure de l'Ulaanbaatar", "ULAT",
                                      "Heure d'\u00e9t\u00e9 de l'Ulaanbaatar", "ULAST",
                                      "Heure de l'Ulaanbaatar", "ULAT"} ;
-        String WART[] = new String[] {"Heure D'Argentine de l'Ouest", "WART",
-                                      "Heure d'\u00e9t\u00e9 D'Argentine de l'Ouest", "WARST"} ;
         String WAT[] = new String[] {"Heure d'Afrique de l'Ouest", "WAT",
                                      "Heure d'\u00e9t\u00e9 d'Afrique de l'Ouest", "WAST",
                                      "Heure d'Afrique de l'Ouest", "WAT"} ;
@@ -254,27 +255,33 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
         String WIT[] = new String[] {"Heure de l'Indon\u00e9sie occidentale", "WIB",
                                      "Heure d'\u00e9t\u00e9 de l'Indon\u00e9sie occidentale", "WIST",
                                      "Heure de l'Indon\u00E9sie occidentale", "WIB"};
-        String WST_AUS[] = new String[] {"Heure normale de l'Ouest (Australie)", "WST",
-                                         "Heure d'\u00E9t\u00E9 de l'Ouest (Australie)", "WST",
-                                         "Ouest (Australie)", "WT"} ;
+        String WST_AUS[] = new String[] {"Heure normale de l'Ouest (Australie)", "AWST",
+                                         "Heure d'\u00E9t\u00E9 de l'Ouest (Australie)", "AWDT",
+                                         "Ouest (Australie)", "AWT"} ;
         String SAMOA[] = new String[] {"Heure standard de Samoa", "SST",
                                        "Heure avanc\u00e9e de Samoa", "SDT",
                                        "Samoa", "ST"};
-        String WST_SAMOA[] = new String[] {"Heure des Samoas occidentales", "WST",
+        String WST_SAMOA[] = new String[] {"Heure des Samoas occidentales", "WSST",
                                            "Heure d'\u00e9t\u00e9 des Samoas occidentales", "WSDT",
                                            "Heure des Samoas occidentales", "WST"} ;
         String ChST[] = new String[] {"Heure normale des \u00eeles Mariannes", "ChST",
                       "Heure d'\u00e9t\u00e9 des \u00eeles Mariannes", "ChDT",
                       "Chamorro", "ChT"};
-        String VICTORIA[] = new String[] {"Heure standard d'Australie orientale (Victoria)", "EST",
-                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Victoria)", "EST",
-                                          "C\u00F4te Est (Victoria)", "ET"};
+        String VICTORIA[] = new String[] {"Heure standard d'Australie orientale (Victoria)", "AEST",
+                                          "Heure d'\u00E9t\u00E9 d'Australie orientale (Victoria)", "AEDT",
+                                          "C\u00F4te Est (Victoria)", "AET"};
         String UTC[] = new String[] {"Temps universel coordonn\u00e9", "UTC",
                                      "Temps universel coordonn\u00e9", "UTC",
                                      "Temps universel coordonn\u00E9", "UTC"};
         String UZT[] = new String[] {"Heure de l'Ouzb\u00e9kistan", "UZT",
                                      "Heure d'\u00e9t\u00e9 de l'Ouzb\u00e9kistan", "UZST",
                                      "Heure de l'Ouzb\u00E9kistan", "UZT"};
+        String XJT[] = new String[] {"Heure normale de Chine", "XJT",
+                                     "Heure avanc\u00e9e de Chine", "XJDT",
+                                     "Chine", "XJT"};
+        String YAKT[] = new String[] {"Heure du Iakoutsk", "YAKT",
+                                      "Heure d'\u00e9t\u00e9 du Iakoutsk", "YAKST",
+                                      "Heure du Iakoutsk", "YAKT"};
 
         return new Object[][] {
             {"America/Los_Angeles", PST},
@@ -307,6 +314,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Europe/Bucharest", EET},
             {"Asia/Shanghai", CTT},
             {"CTT", CTT},
+            {"UTC", UTC},
             /* Don't change the order of the above zones
              * to keep compatibility with the previous version.
              */
@@ -336,13 +344,13 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Africa/Djibouti", EAT},
             {"Africa/Douala", WAT},
             {"Africa/El_Aaiun", WET},
-            {"Africa/Freetown", SLST},
+            {"Africa/Freetown", GMT},
             {"Africa/Gaborone", CAT},
             {"Africa/Harare", CAT},
             {"Africa/Johannesburg", SAST},
             {"Africa/Juba", EAT},
             {"Africa/Kampala", EAT},
-            {"Africa/Khartoum", EAT},
+            {"Africa/Khartoum", CAT},
             {"Africa/Kigali", CAT},
             {"Africa/Kinshasa", WAT},
             {"Africa/Lagos", WAT},
@@ -363,12 +371,12 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Africa/Nouakchott", GMT},
             {"Africa/Ouagadougou", GMT},
             {"Africa/Porto-Novo", WAT},
-            {"Africa/Sao_Tome", GMT},
+            {"Africa/Sao_Tome", WAT},
             {"Africa/Timbuktu", GMT},
             {"Africa/Tripoli", EET},
             {"Africa/Tunis", CET},
-            {"Africa/Windhoek", WAT},
-            {"America/Adak", HAST},
+            {"Africa/Windhoek", CAT},
+            {"America/Adak", HST},
             {"America/Anguilla", AST},
             {"America/Antigua", AST},
             {"America/Araguaina", BRT},
@@ -390,7 +398,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
                                                "Heure d'\u00e9t\u00e9 du Paraguay", "PYST",
                                                "Heure du Paraguay", "PYT"}},
             {"America/Atikokan", EST},
-            {"America/Atka", HAST},
+            {"America/Atka", HST},
             {"America/Bahia", BRT},
             {"America/Bahia_Banderas", CST},
             {"America/Barbados", AST},
@@ -405,7 +413,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"America/Buenos_Aires", AGT},
             {"America/Cambridge_Bay", MST},
             {"America/Campo_Grande", AMT},
-            {"America/Cancun", CST},
+            {"America/Cancun", EST},
             {"America/Caracas", new String[] {"Heure du Venezuela", "VET",
                                               "Heure d'\u00e9t\u00e9 du Venezuela", "VEST",
                                               "Heure du Venezuela", "VET"}},
@@ -430,6 +438,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"America/Eirunepe", ACT},
             {"America/El_Salvador", CST},
             {"America/Ensenada", PST},
+            {"America/Fort_Nelson", MST},
             {"America/Fort_Wayne", EST},
             {"America/Fortaleza", BRT},
             {"America/Glace_Bay", AST},
@@ -484,9 +493,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"America/Mendoza", AGT},
             {"America/Menominee", CST},
             {"America/Merida", CST},
-            {"America/Metlakatla", new String[] {"Heure normale de Metlakatla", "MeST",
-                                                 "Heure avanc\u00E9e de Metlakatla", "MeDT",
-                                                 "Heure de Metlakatla", "MeT"}},
+            {"America/Metlakatla", AKST},
             {"America/Mexico_City", CST},
             {"America/Miquelon", new String[] {"Heure normale de Saint-Pierre et Miquelon", "PMST",
                                                "Heure avanc\u00e9e de Saint-Pierre et Miquelon", "PMDT",
@@ -570,6 +577,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Antarctica/Syowa", new String[] {"Heure de Syowa", "SYOT",
                                                "Heure d'\u00e9t\u00e9 de Syowa", "SYOST",
                                                "Heure de Syowa", "SYOT"}},
+            {"Antarctica/Troll", new String[] {"Temps universel coordonn\u00e9", "UTC",
+                                               "Heure d'\u00e9t\u00e9 d'Europe centrale", "CEST",
+                                               "Troll Time", "ATT"}},
             {"Antarctica/Vostok", new String[] {"Heure de Vostok", "VOST",
                                                 "Heure d'\u00e9t\u00e9 de Vostok", "VOSST",
                                                 "Heure de Vostok", "VOST"}},
@@ -578,7 +588,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Almaty", new String[] {"Heure d'Alma-Ata", "ALMT",
                                           "Heure d'\u00e9t\u00e9 d'Alma-Ata", "ALMST",
                                           "Heure d'Alma-Ata", "ALMT"}},
-            {"Asia/Amman", ARAST},
+            {"Asia/Amman", EET},
             {"Asia/Anadyr", new String[] {"Heure d'Anadyr", "ANAT",
                                           "Heure d'\u00e9t\u00e9 d'Anadyr", "ANAST",
                                           "Heure d'Anadyr", "ANAT"}},
@@ -604,6 +614,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
                                           "Heure d'\u00e9t\u00e9 du Brunei", "BNST",
                                           "Heure du Brunei", "BNT"}},
             {"Asia/Calcutta", IST},
+            {"Asia/Chita", YAKT},
             {"Asia/Choibalsan", new String[] {"Heure de Choibalsan", "CHOT",
                                               "Heure d'\u00e9t\u00e9 de Choibalsan", "CHOST",
                                               "Heure de Choibalsan", "CHOT"}},
@@ -628,9 +639,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Hovd", new String[] {"Heure de Hovd", "HOVT",
                                         "Heure d'\u00e9t\u00e9 de Hovd", "HOVST",
                                         "Heure de Hovd", "HOVT"}},
-            {"Asia/Irkutsk", new String[] {"Heure d'Irkutsk", "IRKT",
-                                           "Heure d'\u00e9t\u00e9 d'Irkutsk", "IRKST",
-                                           "Heure d'Irkutsk", "IRKT"}},
+            {"Asia/Irkutsk", IRKT},
             {"Asia/Istanbul", EET},
             {"Asia/Jakarta", WIT},
             {"Asia/Jayapura", new String[] {"Heure d'Indon\u00e9sie orientale", "WIT",
@@ -643,16 +652,12 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
                                              "Heure d'\u00e9t\u00e9 de Petropavlovsk-Kamchatski", "PETST",
                                              "Heure de Petropavlovsk-Kamchatski", "PETT"}},
             {"Asia/Karachi", PKT},
-            {"Asia/Kashgar", CTT},
+            {"Asia/Kashgar", XJT},
             {"Asia/Kathmandu", NPT},
             {"Asia/Katmandu", NPT},
-            {"Asia/Khandyga", new String[] {"Heure de Khandyga", "YAKT",
-                                            "Heure d'\u00E9t\u00E9 de Khandyga", "YAKST",
-                                            "Heure de Khandyga", "YAKT"}},
+            {"Asia/Khandyga", YAKT},
             {"Asia/Kolkata", IST},
-            {"Asia/Krasnoyarsk", new String[] {"Heure de Krasno\u00efarsk", "KRAT",
-                                               "Heure d'\u00e9t\u00e9 de Krasno\u00efarsk", "KRAST",
-                                               "Heure de Krasno\u00EFarsk", "KRAT"}},
+            {"Asia/Krasnoyarsk", KRAT},
             {"Asia/Kuala_Lumpur", MYT},
             {"Asia/Kuching", MYT},
             {"Asia/Kuwait", ARAST},
@@ -662,12 +667,12 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
                                            "Heure d'\u00e9t\u00e9 de Magadan", "MAGST",
                                            "Heure de Magadan", "MAGT"}},
             {"Asia/Makassar", CIT},
-            {"Asia/Manila", new String[] {"Heure des Philippines", "PHT",
-                                          "Heure d'\u00e9t\u00e9 des Philippines", "PHST",
-                                          "Heure des Philippines", "PHT"}},
+            {"Asia/Manila", new String[] {"Philippines Standard Time", "PST",
+                                          "Philippines Daylight Time", "PDT",
+                                          "Philippines Time", "PT"}},
             {"Asia/Muscat", GST},
             {"Asia/Nicosia", EET},
-            {"Asia/Novokuznetsk", NOVT},
+            {"Asia/Novokuznetsk", KRAT},
             {"Asia/Novosibirsk", NOVT},
             {"Asia/Oral", new String[] {"Heure d'Oral", "ORAT",
                                         "Heure d'\u00e9t\u00e9 d'Oral", "ORAST",
@@ -682,9 +687,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Qyzylorda", new String[] {"Heure de Kyzylorda", "QYZT",
                                              "Heure d'\u00e9t\u00e9 de Kyzylorda", "QYZST",
                                              "Heure de Kyzylorda", "QYZT"}},
-            {"Asia/Rangoon", new String[] {"Heure de Myanmar", "MMT",
-                                           "Heure d'\u00e9t\u00e9 de Myanmar", "MMST",
-                                           "Heure de Myanmar", "MMT"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"Heure de Sakhalin", "SAKT",
@@ -693,6 +696,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Samarkand", UZT},
             {"Asia/Seoul", KST},
             {"Asia/Singapore", SGT},
+            {"Asia/Srednekolymsk", new String[] {"Srednekolymsk Time", "SRET",
+                                                 "Srednekolymsk Daylight Time", "SREDT",
+                                                 "Srednekolymsk Time", "SRET"}},
             {"Asia/Taipei", CTT},
             {"Asia/Tel_Aviv", ISRAEL},
             {"Asia/Tashkent", UZT},
@@ -705,7 +711,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Ujung_Pandang", CIT},
             {"Asia/Ulaanbaatar", ULAT},
             {"Asia/Ulan_Bator", ULAT},
-            {"Asia/Urumqi", CTT},
+            {"Asia/Urumqi", XJT},
             {"Asia/Ust-Nera", new String[] {"Heure d'Ust-Nera", "VLAT",
                                             "Heure d'\u00E9t\u00E9 d'Ust-Nera", "VLAST",
                                             "Heure d'Ust-Nera", "VLAT"}},
@@ -713,9 +719,8 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Asia/Vladivostok", new String[] {"Heure de Vladivostok", "VLAT",
                                                "Heure d'\u00e9t\u00e9 de Vladivostok", "VLAST",
                                                "Heure de Vladivostok", "VLAT"}},
-            {"Asia/Yakutsk", new String[] {"Heure du Iakoutsk", "YAKT",
-                                           "Heure d'\u00e9t\u00e9 du Iakoutsk", "YAKST",
-                                           "Heure du Iakoutsk", "YAKT"}},
+            {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Heure de Yekaterinburg", "YEKT",
                                                  "Heure d'\u00e9t\u00e9 de Yekaterinburg", "YEKST",
                                                  "Heure de Yekaterinburg", "YEKT"}},
@@ -747,9 +752,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Australia/Canberra", EST_NSW},
             {"Australia/Currie", EST_NSW},
             {"Australia/Darwin", DARWIN},
-            {"Australia/Eucla", new String[] {"Heure standard de l'Australie occidentale (centre)", "CWST",
-                                              "Heure d'\u00E9t\u00E9 de l'Australie occidentale (centre)", "CWST",
-                                              "Heure de l'Australie occidentale (centre)", "CWT"}},
+            {"Australia/Eucla", new String[] {"Heure standard de l'Australie occidentale (centre)", "ACWST",
+                                              "Heure d'\u00E9t\u00E9 de l'Australie occidentale (centre)", "ACWDT",
+                                              "Heure de l'Australie occidentale (centre)", "ACWT"}},
             {"Australia/Hobart", TASMANIA},
             {"Australia/LHI", LORD_HOWE},
             {"Australia/Lindeman", BRISBANE},
@@ -773,7 +778,6 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Brazil/West", AMT},
             {"Canada/Atlantic", AST},
             {"Canada/Central", CST},
-            {"Canada/East-Saskatchewan", CST},
             {"Canada/Eastern", EST},
             {"Canada/Mountain", MST},
             {"Canada/Newfoundland", NST},
@@ -815,7 +819,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Europe/Isle_of_Man", GMTBST},
             {"Europe/Istanbul", EET},
             {"Europe/Jersey", GMTBST},
-            {"Europe/Kaliningrad", FET},
+            {"Europe/Kaliningrad", EET},
             {"Europe/Kiev", EET},
             {"Europe/Lisbon", WET},
             {"Europe/Ljubljana", CET},
@@ -824,7 +828,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Europe/Madrid", CET},
             {"Europe/Malta", CET},
             {"Europe/Mariehamn", EET},
-            {"Europe/Minsk", FET},
+            {"Europe/Minsk", MSK},
             {"Europe/Monaco", CET},
             {"Europe/Moscow", MSK},
             {"Europe/Nicosia", EET},
@@ -838,7 +842,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
                                             "Heure de Samara", "SAMT"}},
             {"Europe/San_Marino", CET},
             {"Europe/Sarajevo", CET},
-            {"Europe/Simferopol", EET},
+            {"Europe/Simferopol", MSK},
             {"Europe/Skopje", CET},
             {"Europe/Sofia", EET},
             {"Europe/Stockholm", CET},
@@ -850,9 +854,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"Europe/Vatican", CET},
             {"Europe/Vienna", CET},
             {"Europe/Vilnius", EET},
-            {"Europe/Volgograd", new String[] {"Heure de Volgograd", "VOLT",
-                                               "Heure d'\u00e9t\u00e9 de Volgograd", "VOLST",
-                                               "Heure de Volgograd", "VOLT"}},
+            {"Europe/Volgograd", MSK},
             {"Europe/Warsaw", CET},
             {"Europe/Zagreb", CET},
             {"Europe/Zaporozhye", EET},
@@ -914,6 +916,9 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"PRT", AST},
             {"Pacific/Apia", WST_SAMOA},
             {"Pacific/Auckland", NZST},
+            {"Pacific/Bougainville", new String[] {"Bougainville Standard Time", "BST",
+                                                   "Bougainville Daylight Time", "BST",
+                                                   "Bougainville Time", "BT"}},
             {"Pacific/Chatham", CHAST},
             {"Pacific/Chuuk", CHUT},
             {"Pacific/Easter", EASTER},
@@ -1018,7 +1023,7 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"UCT", UTC},
             {"Universal", UTC},
             {"US/Alaska", AKST},
-            {"US/Aleutian", HAST},
+            {"US/Aleutian", HST},
             {"US/Arizona", MST},
             {"US/Central", CST},
             {"US/Eastern", EST},
@@ -1030,7 +1035,6 @@ public final class TimeZoneNames_fr extends TimeZoneNamesBundle {
             {"US/Pacific", PST},
             {"US/Pacific-New", PST},
             {"US/Samoa", SAMOA},
-            {"UTC", UTC},
             {"VST", ICT},
             {"W-SU", MSK},
             {"WET", WET},

@@ -53,7 +53,7 @@ public class FallbackLocaleProviderAdapter extends JRELocaleProviderAdapter {
      * Returns the type of this LocaleProviderAdapter
      */
     @Override
-    public LocaleProviderAdapter.Type getAdapterType() {
+    public Type getAdapterType() {
         return Type.FALLBACK;
     }
 

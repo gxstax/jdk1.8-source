@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -278,18 +278,34 @@ public class DrawImage implements DrawImagePipe
                                      Color bgColor, int interpType,
                                      double coords[])
     {
-        double dx = coords[0];
-        double dy = coords[1];
-        double dw = coords[2] - dx;
-        double dh = coords[3] - dy;
+        double dx1 = coords[0];
+        double dy1 = coords[1];
+        double dx2 = coords[2];
+        double dy2 = coords[3];
+        double dw = dx2 - dx1;
+        double dh = dy2 - dy1;
+
+        /* If any of the destination coordinates exceed the integer range,
+         * then the calculations performed in calls made here cannot be
+         * guaranteed to be correct, or to converge (terminate).
+         * So return out of here, deferring to code that can handle this.
+         */
+        if (dx1 < Integer.MIN_VALUE || dx1 > Integer.MAX_VALUE ||
+            dy1 < Integer.MIN_VALUE || dy1 > Integer.MAX_VALUE ||
+            dx2 < Integer.MIN_VALUE || dx2 > Integer.MAX_VALUE ||
+            dy2 < Integer.MIN_VALUE || dy2 > Integer.MAX_VALUE)
+        {
+            return false;
+        }
+
         // First check if width and height are very close to img w&h.
         if (closeToInteger(sx2-sx1, dw) && closeToInteger(sy2-sy1, dh)) {
             // Round location to nearest pixel and then test
             // if it will cause interpolation anomalies.
-            int idx = (int) Math.floor(dx + 0.5);
-            int idy = (int) Math.floor(dy + 0.5);
+            int idx = (int) Math.floor(dx1 + 0.5);
+            int idy = (int) Math.floor(dy1 + 0.5);
             if (interpType == AffineTransformOp.TYPE_NEAREST_NEIGHBOR ||
-                (closeToInteger(idx, dx) && closeToInteger(idy, dy)))
+                (closeToInteger(idx, dx1) && closeToInteger(idy, dy1)))
             {
                 renderImageCopy(sg, img, bgColor,
                                 idx, idy,
@@ -302,7 +318,7 @@ public class DrawImage implements DrawImagePipe
         if (dw > 0 && dh > 0) {
             if (renderImageScale(sg, img, bgColor, interpType,
                                  sx1, sy1, sx2, sy2,
-                                 coords[0], coords[1], coords[2], coords[3]))
+                                 dx1, dy1, dx2, dy2))
             {
                 return true;
             }
@@ -310,11 +326,19 @@ public class DrawImage implements DrawImagePipe
         return false;
     }
 
-    /*
-     * Return a BufferedImage of the requested type with the indicated
-     * subimage of the original image located at 0,0 in the new image.
-     * If a bgColor is supplied, composite the original image over that
-     * color with a SrcOver operation, otherwise make a SrcNoEa copy.
+    /**
+     * Return a non-accelerated BufferedImage of the requested type with the
+     * indicated subimage of the original image located at 0,0 in the new image.
+     * If a bgColor is supplied, composite the original image over that color
+     * with a SrcOver operation, otherwise make a SrcNoEa copy.
+     * <p>
+     * Returned BufferedImage is not accelerated for two reasons:
+     * <ul>
+     * <li> Types of the image and surface are predefined, because these types
+     *      correspond to the TransformHelpers, which we know we have. And
+     *      acceleration can change the type of the surface
+     * <li> Image will be used only once and acceleration caching wouldn't help
+     * </ul>
      */
     BufferedImage makeBufferedImage(Image img, Color bgColor, int type,
                                     int sx1, int sy1, int sx2, int sy2)
@@ -324,6 +348,7 @@ public class DrawImage implements DrawImagePipe
         final BufferedImage bimg = new BufferedImage(width, height, type);
         final SunGraphics2D g2d = (SunGraphics2D) bimg.createGraphics();
         g2d.setComposite(AlphaComposite.Src);
+        bimg.setAccelerationPriority(0);
         if (bgColor != null) {
             g2d.setColor(bgColor);
             g2d.fillRect(0, 0, width, height);
@@ -339,8 +364,53 @@ public class DrawImage implements DrawImagePipe
                                     int sx1, int sy1, int sx2, int sy2,
                                     Color bgColor)
     {
+        final AffineTransform itx;
+        try {
+            itx = tx.createInverse();
+        } catch (final NoninvertibleTransformException ignored) {
+            // Non-invertible transform means no output
+            return;
+        }
+
+        /*
+         * Find the maximum bounds on the destination that will be
+         * affected by the transformed source.  First, transform all
+         * four corners of the source and then min and max the resulting
+         * destination coordinates of the transformed corners.
+         * Note that tx already has the offset to sx1,sy1 accounted
+         * for so we use the box (0, 0, sx2-sx1, sy2-sy1) as the
+         * source coordinates.
+         */
+        final double[] coords = new double[8];
+        /* corner:  UL      UR      LL      LR   */
+        /* index:  0  1    2  3    4  5    6  7  */
+        /* coord: (0, 0), (w, 0), (0, h), (w, h) */
+        coords[2] = coords[6] = sx2 - sx1;
+        coords[5] = coords[7] = sy2 - sy1;
+        tx.transform(coords, 0, coords, 0, 4);
+        double ddx1, ddy1, ddx2, ddy2;
+        ddx1 = ddx2 = coords[0];
+        ddy1 = ddy2 = coords[1];
+        for (int i = 2; i < coords.length; i += 2) {
+            double d = coords[i];
+            if (ddx1 > d) ddx1 = d;
+            else if (ddx2 < d) ddx2 = d;
+            d = coords[i+1];
+            if (ddy1 > d) ddy1 = d;
+            else if (ddy2 < d) ddy2 = d;
+        }
+
         Region clip = sg.getCompClip();
-        SurfaceData dstData = sg.surfaceData;
+        final int dx1 = Math.max((int) Math.floor(ddx1), clip.lox);
+        final int dy1 = Math.max((int) Math.floor(ddy1), clip.loy);
+        final int dx2 = Math.min((int) Math.ceil(ddx2), clip.hix);
+        final int dy2 = Math.min((int) Math.ceil(ddy2), clip.hiy);
+        if (dx2 <= dx1 || dy2 <= dy1) {
+            // empty destination means no output
+            return;
+        }
+
+        final SurfaceData dstData = sg.surfaceData;
         SurfaceData srcData = dstData.getSourceSurfaceData(img,
                                                            SunGraphics2D.TRANSFORM_GENERIC,
                                                            sg.imageComp,
@@ -404,56 +474,13 @@ public class DrawImage implements DrawImagePipe
             // assert(helper != null);
         }
 
-        AffineTransform itx;
-        try {
-            itx = tx.createInverse();
-        } catch (NoninvertibleTransformException e) {
-            // Non-invertible transform means no output
-            return;
-        }
-
-        /*
-         * Find the maximum bounds on the destination that will be
-         * affected by the transformed source.  First, transform all
-         * four corners of the source and then min and max the resulting
-         * destination coordinates of the transformed corners.
-         * Note that tx already has the offset to sx1,sy1 accounted
-         * for so we use the box (0, 0, sx2-sx1, sy2-sy1) as the
-         * source coordinates.
-         */
-        double coords[] = new double[8];
-        /* corner:  UL      UR      LL      LR   */
-        /* index:  0  1    2  3    4  5    6  7  */
-        /* coord: (0, 0), (w, 0), (0, h), (w, h) */
-        coords[2] = coords[6] = sx2 - sx1;
-        coords[5] = coords[7] = sy2 - sy1;
-        tx.transform(coords, 0, coords, 0, 4);
-        double ddx1, ddy1, ddx2, ddy2;
-        ddx1 = ddx2 = coords[0];
-        ddy1 = ddy2 = coords[1];
-        for (int i = 2; i < coords.length; i += 2) {
-            double d = coords[i];
-            if (ddx1 > d) ddx1 = d;
-            else if (ddx2 < d) ddx2 = d;
-            d = coords[i+1];
-            if (ddy1 > d) ddy1 = d;
-            else if (ddy2 < d) ddy2 = d;
-        }
-        int dx1 = (int) Math.floor(ddx1);
-        int dy1 = (int) Math.floor(ddy1);
-        int dx2 = (int) Math.ceil(ddx2);
-        int dy2 = (int) Math.ceil(ddy2);
-
         SurfaceType dstType = dstData.getSurfaceType();
-        MaskBlit maskblit;
-        Blit blit;
         if (sg.compositeState <= SunGraphics2D.COMP_ALPHA) {
             /* NOTE: We either have, or we can make,
              * a MaskBlit for any alpha composite type
              */
-            maskblit = MaskBlit.getFromCache(SurfaceType.IntArgbPre,
-                                             sg.imageComp,
-                                             dstType);
+            MaskBlit maskblit = MaskBlit.getFromCache(SurfaceType.IntArgbPre,
+                                                      sg.imageComp, dstType);
 
             /* NOTE: We can only use the native TransformHelper
              * func to go directly to the dest if both the helper
@@ -471,27 +498,19 @@ public class DrawImage implements DrawImagePipe
                                  null, 0, 0);
                 return;
             }
-            blit = null;
-        } else {
-            /* NOTE: We either have, or we can make,
-             * a Blit for any composite type, even Custom
-             */
-            maskblit = null;
-            blit = Blit.getFromCache(SurfaceType.IntArgbPre,
-                                     sg.imageComp,
-                                     dstType);
         }
 
         // We need to transform to a temp image and then copy
         // just the pieces that are valid data to the dest.
-        BufferedImage tmpimg = new BufferedImage(dx2-dx1, dy2-dy1,
-                                                 BufferedImage.TYPE_INT_ARGB);
+        final int w = dx2 - dx1;
+        final int h = dy2 - dy1;
+        BufferedImage tmpimg = new BufferedImage(w, h,
+                                                 BufferedImage.TYPE_INT_ARGB_PRE);
         SurfaceData tmpData = SurfaceData.getPrimarySurfaceData(tmpimg);
         SurfaceType tmpType = tmpData.getSurfaceType();
-        MaskBlit tmpmaskblit =
-            MaskBlit.getFromCache(SurfaceType.IntArgbPre,
-                                  CompositeType.SrcNoEa,
-                                  tmpType);
+        MaskBlit tmpmaskblit = MaskBlit.getFromCache(SurfaceType.IntArgbPre,
+                                                     CompositeType.SrcNoEa,
+                                                     tmpType);
         /*
          * The helper function fills a temporary edges buffer
          * for us with the bounding coordinates of each scanline
@@ -506,7 +525,7 @@ public class DrawImage implements DrawImagePipe
          *
          * edges thus has to be h*2+2 in length
          */
-        int edges[] = new int[(dy2-dy1)*2+2];
+        final int[] edges = new int[h * 2 + 2];
         // It is important that edges[0]=edges[1]=0 when we call
         // Transform in case it must return early and we would
         // not want to render anything on an error condition.
@@ -514,35 +533,17 @@ public class DrawImage implements DrawImagePipe
                          AlphaComposite.Src, null,
                          itx, interpType,
                          sx1, sy1, sx2, sy2,
-                         0, 0, dx2-dx1, dy2-dy1,
+                         0, 0, w, h,
                          edges, dx1, dy1);
 
-        /*
-         * Now copy the results, scanline by scanline, into the dest.
-         * The edges array helps us minimize the work.
+        final Region region = Region.getInstance(dx1, dy1, dx2, dy2, edges);
+        clip = clip.getIntersection(region);
+
+        /* NOTE: We either have, or we can make,
+         * a Blit for any composite type, even Custom
          */
-        int index = 2;
-        for (int y = edges[0]; y < edges[1]; y++) {
-            int relx1 = edges[index++];
-            int relx2 = edges[index++];
-            if (relx1 >= relx2) {
-                continue;
-            }
-            if (maskblit != null) {
-                maskblit.MaskBlit(tmpData, dstData,
-                                  sg.composite, clip,
-                                  relx1, y,
-                                  dx1+relx1, dy1+y,
-                                  relx2 - relx1, 1,
-                                  null, 0, 0);
-            } else {
-                blit.Blit(tmpData, dstData,
-                          sg.composite, clip,
-                          relx1, y,
-                          dx1+relx1, dy1+y,
-                          relx2 - relx1, 1);
-            }
-        }
+        final Blit blit = Blit.getFromCache(tmpType, sg.imageComp, dstType);
+        blit.Blit(tmpData, dstData, sg.composite, clip, 0, 0, dx1, dy1, w, h);
     }
 
     // Render an image using only integer translation

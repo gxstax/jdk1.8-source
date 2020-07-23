@@ -53,7 +53,7 @@ public abstract class ResolverConfiguration {
     public static ResolverConfiguration open() {
         synchronized (lock) {
             if (provider == null) {
-                provider = new ResolverConfigurationImpl();
+                provider = new sun.net.dns.ResolverConfigurationImpl();
             }
             return provider;
         }

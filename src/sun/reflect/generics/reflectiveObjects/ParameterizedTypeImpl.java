@@ -38,9 +38,9 @@ import java.util.Objects;
 /** Implementing class for ParameterizedType interface. */
 
 public class ParameterizedTypeImpl implements ParameterizedType {
-    private Type[] actualTypeArguments;
-    private Class<?>  rawType;
-    private Type   ownerType;
+    private final Type[] actualTypeArguments;
+    private final Class<?>  rawType;
+    private final Type   ownerType;
 
     private ParameterizedTypeImpl(Class<?> rawType,
                                   Type[] actualTypeArguments,
@@ -212,7 +212,7 @@ public class ParameterizedTypeImpl implements ParameterizedType {
             else
                 sb.append(ownerType.toString());
 
-            sb.append(".");
+            sb.append("$");
 
             if (ownerType instanceof ParameterizedTypeImpl) {
                 // Find simple name of nested type by removing the
@@ -220,7 +220,7 @@ public class ParameterizedTypeImpl implements ParameterizedType {
                 sb.append(rawType.getName().replace( ((ParameterizedTypeImpl)ownerType).rawType.getName() + "$",
                                          ""));
             } else
-                sb.append(rawType.getName());
+               sb.append(rawType.getSimpleName());
         } else
             sb.append(rawType.getName());
 

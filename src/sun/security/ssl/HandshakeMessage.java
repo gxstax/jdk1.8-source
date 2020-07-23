@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -88,6 +88,8 @@ public abstract class HandshakeMessage {
     static final byte   ht_client_key_exchange = 16;
 
     static final byte   ht_finished = 20;
+
+    static final byte   ht_not_applicable         = -1;     // N/A
 
     /* Class and subclass dynamic debugging support */
     public static final Debug debug = Debug.getInstance("ssl");
@@ -230,11 +232,6 @@ static final class ClientHello extends HandshakeMessage {
         this.sessionId = sessionId;
         this.cipherSuites = cipherSuites;
 
-        if (cipherSuites.containsEC()) {
-            extensions.add(SupportedEllipticCurvesExtension.DEFAULT);
-            extensions.add(SupportedEllipticPointFormatsExtension.DEFAULT);
-        }
-
         clnt_random = new RandomCookie(generator);
         compression_methods = NULL_COMPRESSION;
     }
@@ -243,6 +240,7 @@ static final class ClientHello extends HandshakeMessage {
         protocolVersion = ProtocolVersion.valueOf(s.getInt8(), s.getInt8());
         clnt_random = new RandomCookie(s);
         sessionId = new SessionId(s.getBytes8());
+        sessionId.checkLength(protocolVersion);
         cipherSuites = new CipherSuiteList(s);
         compression_methods = s.getBytes8();
         if (messageLength() != messageLength) {
@@ -276,6 +274,10 @@ static final class ClientHello extends HandshakeMessage {
         HelloExtension signatureAlgorithm =
                 new SignatureAlgorithmsExtension(algorithms);
         extensions.add(signatureAlgorithm);
+    }
+
+    void addExtendedMasterSecretExtension() {
+        extensions.add(new ExtendedMasterSecretExtension());
     }
 
     @Override
@@ -355,6 +357,7 @@ class ServerHello extends HandshakeMessage
                                                   input.getInt8());
         svr_random = new RandomCookie(input);
         sessionId = new SessionId(input.getBytes8());
+        sessionId.checkLength(protocolVersion);
         cipherSuite = CipherSuite.valueOf(input.getInt8(), input.getInt8());
         compression_method = (byte)input.getInt8();
         if (messageLength() != messageLength) {
@@ -490,11 +493,14 @@ class CertificateMsg extends HandshakeMessage
     void print(PrintStream s) throws IOException {
         s.println("*** Certificate chain");
 
-        if (debug != null && Debug.isOn("verbose")) {
-            for (int i = 0; i < chain.length; i++)
+        if (chain.length == 0) {
+            s.println("<Empty>");
+        } else if (debug != null && Debug.isOn("verbose")) {
+            for (int i = 0; i < chain.length; i++) {
                 s.println("chain [" + i + "] = " + chain[i]);
-            s.println("***");
+            }
         }
+        s.println("***");
     }
 
     X509Certificate[] getCertificateChain() {
@@ -807,8 +813,9 @@ class DH_ServerKeyExchange extends ServerKeyExchange
             if (!localSupportedSignAlgs.contains(
                     preferableSignatureAlgorithm)) {
                 throw new SSLHandshakeException(
-                        "Unsupported SignatureAndHashAlgorithm in " +
-                        "ServerKeyExchange message");
+                    "Unsupported SignatureAndHashAlgorithm in " +
+                    "ServerKeyExchange message: " +
+                    preferableSignatureAlgorithm);
             }
         } else {
             this.preferableSignatureAlgorithm = null;
@@ -841,7 +848,8 @@ class DH_ServerKeyExchange extends ServerKeyExchange
                         sig = RSASignature.getInstance();
                         break;
                     default:
-                        throw new SSLKeyException("neither an RSA or a DSA key");
+                        throw new SSLKeyException(
+                            "neither an RSA or a DSA key: " + algorithm);
                 }
         }
 
@@ -1008,7 +1016,7 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange {
         ECParameterSpec params = publicKey.getParams();
         ECPoint point = publicKey.getW();
         pointBytes = JsseJce.encodePoint(point, params.getCurve());
-        curveId = SupportedEllipticCurvesExtension.getCurveIndex(params);
+        curveId = EllipticCurvesExtension.getCurveIndex(params);
 
         if (privateKey == null) {
             // ECDH_anon
@@ -1022,7 +1030,7 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange {
         } else {
             sig = getSignature(privateKey.getAlgorithm());
         }
-        sig.initSign(privateKey);  // where is the SecureRandom?
+        sig.initSign(privateKey, sr);
 
         updateSignature(sig, clntNonce, svrNonce);
         signatureBytes = sig.sign();
@@ -1046,13 +1054,11 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange {
         // the supported curves during the exchange of the Hello messages.
         if (curveType == CURVE_NAMED_CURVE) {
             curveId = input.getInt16();
-            if (SupportedEllipticCurvesExtension.isSupported(curveId)
-                    == false) {
+            if (!EllipticCurvesExtension.isSupported(curveId)) {
                 throw new SSLHandshakeException(
                     "Unsupported curveId: " + curveId);
             }
-            String curveOid =
-                SupportedEllipticCurvesExtension.getCurveOid(curveId);
+            String curveOid = EllipticCurvesExtension.getCurveOid(curveId);
             if (curveOid == null) {
                 throw new SSLHandshakeException(
                     "Unknown named curve: " + curveId);
@@ -1091,7 +1097,8 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange {
                     preferableSignatureAlgorithm)) {
                 throw new SSLHandshakeException(
                         "Unsupported SignatureAndHashAlgorithm in " +
-                        "ServerKeyExchange message");
+                        "ServerKeyExchange message: " +
+                        preferableSignatureAlgorithm);
             }
         }
 
@@ -1131,7 +1138,8 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange {
                 case "RSA":
                     return RSASignature.getInstance();
                 default:
-                    throw new NoSuchAlgorithmException("neither an RSA or a EC key");
+                    throw new NoSuchAlgorithmException(
+                        "neither an RSA or a EC key : " + keyAlgorithm);
             }
     }
 
@@ -1338,7 +1346,8 @@ class CertificateRequest extends HandshakeMessage
             algorithmsLen = input.getInt16();
             if (algorithmsLen < 2) {
                 throw new SSLProtocolException(
-                        "Invalid supported_signature_algorithms field");
+                    "Invalid supported_signature_algorithms field: " +
+                    algorithmsLen);
             }
 
             algorithms = new ArrayList<SignatureAndHashAlgorithm>();
@@ -1357,7 +1366,8 @@ class CertificateRequest extends HandshakeMessage
 
             if (remains != 0) {
                 throw new SSLProtocolException(
-                        "Invalid supported_signature_algorithms field");
+                    "Invalid supported_signature_algorithms field. remains: " +
+                    remains);
             }
         } else {
             algorithms = new ArrayList<SignatureAndHashAlgorithm>();
@@ -1374,7 +1384,8 @@ class CertificateRequest extends HandshakeMessage
         }
 
         if (len != 0) {
-            throw new SSLProtocolException("Bad CertificateRequest DN length");
+            throw new SSLProtocolException(
+                "Bad CertificateRequest DN length: " + len);
         }
 
         authorities = v.toArray(new DistinguishedName[v.size()]);
@@ -1552,7 +1563,7 @@ static final class CertificateVerify extends HandshakeMessage {
     // the signature bytes
     private byte[] signature;
 
-    // protocol version being established using this ServerKeyExchange message
+    // protocol version being established using this CertificateVerify message
     ProtocolVersion protocolVersion;
 
     // the preferable signature algorithm used by this CertificateVerify message
@@ -1604,8 +1615,8 @@ static final class CertificateVerify extends HandshakeMessage {
             if (!localSupportedSignAlgs.contains(
                     preferableSignatureAlgorithm)) {
                 throw new SSLHandshakeException(
-                        "Unsupported SignatureAndHashAlgorithm in " +
-                        "ServerKeyExchange message");
+                    "Unsupported SignatureAndHashAlgorithm in " +
+                    "CertificateVerify message: " + preferableSignatureAlgorithm);
             }
         }
 
@@ -1907,7 +1918,7 @@ static final class Finished extends HandshakeMessage {
      */
     boolean verify(HandshakeHash handshakeHash, int sender, SecretKey master) {
         byte[] myFinished = getFinished(handshakeHash, sender, master);
-        return Arrays.equals(myFinished, verifyData);
+        return MessageDigest.isEqual(myFinished, verifyData);
     }
 
     /*
@@ -1972,7 +1983,8 @@ static final class Finished extends HandshakeMessage {
                 SecretKey prfKey = kg.generateKey();
                 if ("RAW".equals(prfKey.getFormat()) == false) {
                     throw new ProviderException(
-                        "Invalid PRF output, format must be RAW");
+                        "Invalid PRF output, format must be RAW. " +
+                        "Format received: " + prfKey.getFormat());
                 }
                 byte[] finished = prfKey.getEncoded();
                 return finished;

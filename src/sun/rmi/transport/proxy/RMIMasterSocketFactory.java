@@ -53,7 +53,7 @@ public class RMIMasterSocketFactory extends RMISocketFactory {
 
     private static String getLogLevel() {
         return AccessController.doPrivileged(
-            new GetPropertyAction("sun.rmi.transport.proxy.logLevel"));
+            new sun.security.action.GetPropertyAction("sun.rmi.transport.proxy.logLevel"));
     }
 
     /* proxy package log */

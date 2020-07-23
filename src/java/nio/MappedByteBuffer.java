@@ -25,7 +25,6 @@
 
 package java.nio;
 
-import java.io.FileDescriptor;
 import sun.misc.Unsafe;
 
 

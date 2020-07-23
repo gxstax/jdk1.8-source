@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -74,12 +74,6 @@ final class CipherSuite implements Comparable<CipherSuite> {
 
     // minimum priority for default enabled CipherSuites
     final static int DEFAULT_SUITES_PRIORITY = 300;
-
-    // Flag indicating if CipherSuite availability can change dynamically.
-    // This is the case when we rely on a JCE cipher implementation that
-    // may not be available in the installed JCE providers.
-    // It is true because we might not have an ECC implementation.
-    final static boolean DYNAMIC_AVAILABILITY = true;
 
     private final static boolean ALLOW_ECC = Debug.getBooleanProperty
         ("com.sun.net.ssl.enableECC", true);
@@ -186,9 +180,6 @@ final class CipherSuite implements Comparable<CipherSuite> {
      * Return whether this CipherSuite is available for use. A
      * CipherSuite may be unavailable even if it is supported
      * (i.e. allowed == true) if the required JCE cipher is not installed.
-     * In some configuration, this situation may change over time, call
-     * CipherSuiteList.clearAvailableCache() before this method to obtain
-     * the most current status.
      */
     boolean isAvailable() {
         return allowed && keyExchange.isAvailable() && cipher.isAvailable();
@@ -335,36 +326,38 @@ final class CipherSuite implements Comparable<CipherSuite> {
     static enum KeyExchange {
 
         // key exchange algorithms
-        K_NULL       ("NULL",       false),
-        K_RSA        ("RSA",        true),
-        K_RSA_EXPORT ("RSA_EXPORT", true),
-        K_DH_RSA     ("DH_RSA",     false),
-        K_DH_DSS     ("DH_DSS",     false),
-        K_DHE_DSS    ("DHE_DSS",    true),
-        K_DHE_RSA    ("DHE_RSA",    true),
-        K_DH_ANON    ("DH_anon",    true),
+        K_NULL       ("NULL",       false,      false),
+        K_RSA        ("RSA",        true,       false),
+        K_RSA_EXPORT ("RSA_EXPORT", true,       false),
+        K_DH_RSA     ("DH_RSA",     false,      false),
+        K_DH_DSS     ("DH_DSS",     false,      false),
+        K_DHE_DSS    ("DHE_DSS",    true,       false),
+        K_DHE_RSA    ("DHE_RSA",    true,       false),
+        K_DH_ANON    ("DH_anon",    true,       false),
 
-        K_ECDH_ECDSA ("ECDH_ECDSA",  ALLOW_ECC),
-        K_ECDH_RSA   ("ECDH_RSA",    ALLOW_ECC),
-        K_ECDHE_ECDSA("ECDHE_ECDSA", ALLOW_ECC),
-        K_ECDHE_RSA  ("ECDHE_RSA",   ALLOW_ECC),
-        K_ECDH_ANON  ("ECDH_anon",   ALLOW_ECC),
+        K_ECDH_ECDSA ("ECDH_ECDSA",  ALLOW_ECC, true),
+        K_ECDH_RSA   ("ECDH_RSA",    ALLOW_ECC, true),
+        K_ECDHE_ECDSA("ECDHE_ECDSA", ALLOW_ECC, true),
+        K_ECDHE_RSA  ("ECDHE_RSA",   ALLOW_ECC, true),
+        K_ECDH_ANON  ("ECDH_anon",   ALLOW_ECC, true),
 
         // Kerberos cipher suites
-        K_KRB5       ("KRB5", true),
-        K_KRB5_EXPORT("KRB5_EXPORT", true),
+        K_KRB5       ("KRB5", true,             false),
+        K_KRB5_EXPORT("KRB5_EXPORT", true,      false),
 
         // renegotiation protection request signaling cipher suite
-        K_SCSV       ("SCSV",        true);
+        K_SCSV       ("SCSV",        true,      false);
 
         // name of the key exchange algorithm, e.g. DHE_DSS
         final String name;
         final boolean allowed;
+        final boolean isEC;
         private final boolean alwaysAvailable;
 
-        KeyExchange(String name, boolean allowed) {
+        KeyExchange(String name, boolean allowed, boolean isEC) {
             this.name = name;
             this.allowed = allowed;
+            this.isEC = isEC;
             this.alwaysAvailable = allowed &&
                 (!name.startsWith("EC")) && (!name.startsWith("KRB"));
         }
@@ -374,7 +367,7 @@ final class CipherSuite implements Comparable<CipherSuite> {
                 return true;
             }
 
-            if (name.startsWith("EC")) {
+            if (isEC) {
                 return (allowed && JsseJce.isEcAvailable());
             } else if (name.startsWith("KRB")) {
                 return (allowed && JsseJce.isKerberosAvailable());
@@ -403,10 +396,6 @@ final class CipherSuite implements Comparable<CipherSuite> {
      * for this algorithm.
      */
     final static class BulkCipher {
-
-        // Map BulkCipher -> Boolean(available)
-        private final static Map<BulkCipher,Boolean> availableCache =
-                                            new HashMap<>(8);
 
         // descriptive name including key size, e.g. AES/128
         final String description;
@@ -451,6 +440,9 @@ final class CipherSuite implements Comparable<CipherSuite> {
         // The secure random used to detect the cipher availability.
         private final static SecureRandom secureRandom;
 
+        // runtime availability
+        private final boolean isAvailable;
+
         static {
             try {
                 secureRandom = JsseJce.getSecureRandom();
@@ -475,6 +467,17 @@ final class CipherSuite implements Comparable<CipherSuite> {
 
             this.expandedKeySize = expandedKeySize;
             this.exportable = true;
+
+            // availability of this bulk cipher
+            //
+            // Currently all supported ciphers except AES are always available
+            // via the JSSE internal implementations. We also assume AES/128 of
+            // CBC mode is always available since it is shipped with the SunJCE
+            // provider.  However, AES/256 is unavailable when the default JCE
+            // policy jurisdiction files are installed because of key length
+            // restrictions.
+            this.isAvailable =
+                    allowed ? isUnlimited(keySize, transformation) : false;
         }
 
         BulkCipher(String transformation, CipherType cipherType, int keySize,
@@ -491,6 +494,17 @@ final class CipherSuite implements Comparable<CipherSuite> {
 
             this.expandedKeySize = keySize;
             this.exportable = false;
+
+            // availability of this bulk cipher
+            //
+            // Currently all supported ciphers except AES are always available
+            // via the JSSE internal implementations. We also assume AES/128 of
+            // CBC mode is always available since it is shipped with the SunJCE
+            // provider.  However, AES/256 is unavailable when the default JCE
+            // policy jurisdiction files are installed because of key length
+            // restrictions.
+            this.isAvailable =
+                    allowed ? isUnlimited(keySize, transformation) : false;
         }
 
         /**
@@ -508,84 +522,27 @@ final class CipherSuite implements Comparable<CipherSuite> {
 
         /**
          * Test if this bulk cipher is available. For use by CipherSuite.
-         *
-         * Currently all supported ciphers except AES are always available
-         * via the JSSE internal implementations. We also assume AES/128 of
-         * CBC mode is always available since it is shipped with the SunJCE
-         * provider.  However, AES/256 is unavailable when the default JCE
-         * policy jurisdiction files are installed because of key length
-         * restrictions, and AEAD is unavailable when the underlying providers
-         * do not support AEAD/GCM mode.
          */
         boolean isAvailable() {
-            if (allowed == false) {
-                return false;
+            return this.isAvailable;
+        }
+
+        private static boolean isUnlimited(int keySize, String transformation) {
+            int keySizeInBits = keySize * 8;
+            if (keySizeInBits > 128) {    // need the JCE unlimited
+                                          // strength jurisdiction policy
+                try {
+                    if (Cipher.getMaxAllowedKeyLength(
+                            transformation) < keySizeInBits) {
+
+                        return false;
+                    }
+                } catch (Exception e) {
+                    return false;
+                }
             }
 
-            if ((this == B_AES_256) ||
-                    (this.cipherType == CipherType.AEAD_CIPHER)) {
-                return isAvailable(this);
-            }
-
-            // always available
             return true;
-        }
-
-        // for use by CipherSuiteList.clearAvailableCache();
-        static synchronized void clearAvailableCache() {
-            if (DYNAMIC_AVAILABILITY) {
-                availableCache.clear();
-            }
-        }
-
-        private static synchronized boolean isAvailable(BulkCipher cipher) {
-            Boolean b = availableCache.get(cipher);
-            if (b == null) {
-                int keySizeInBits = cipher.keySize * 8;
-                if (keySizeInBits > 128) {    // need the JCE unlimited
-                                               // strength jurisdiction policy
-                    try {
-                        if (Cipher.getMaxAllowedKeyLength(
-                                cipher.transformation) < keySizeInBits) {
-                            b = Boolean.FALSE;
-                        }
-                    } catch (Exception e) {
-                        b = Boolean.FALSE;
-                    }
-                }
-
-                if (b == null) {
-                    b = Boolean.FALSE;          // may be reset to TRUE if
-                                                // the cipher is available
-                    CipherBox temporary = null;
-                    try {
-                        SecretKey key = new SecretKeySpec(
-                                            new byte[cipher.expandedKeySize],
-                                            cipher.algorithm);
-                        IvParameterSpec iv;
-                        if (cipher.cipherType == CipherType.AEAD_CIPHER) {
-                            iv = new IvParameterSpec(
-                                            new byte[cipher.fixedIvSize]);
-                        } else {
-                            iv = new IvParameterSpec(new byte[cipher.ivSize]);
-                        }
-                        temporary = cipher.newCipher(
-                                            ProtocolVersion.DEFAULT,
-                                            key, iv, secureRandom, true);
-                        b = temporary.isAvailable();
-                    } catch (NoSuchAlgorithmException e) {
-                        // not available
-                    } finally {
-                        if (temporary != null) {
-                            temporary.dispose();
-                        }
-                    }
-                }
-
-                availableCache.put(cipher, b);
-            }
-
-            return b.booleanValue();
         }
 
         @Override
@@ -968,7 +925,7 @@ final class CipherSuite implements Comparable<CipherSuite> {
          * 1. Prefer Suite B compliant cipher suites, see RFC6460 (To be
          *    changed later, see below).
          * 2. Prefer the stronger bulk cipher, in the order of AES_256(GCM),
-         *    AES_128(GCM), AES_256, AES_128, RC-4, 3DES-EDE.
+         *    AES_128(GCM), AES_256, AES_128, 3DES-EDE.
          * 3. Prefer the stronger MAC algorithm, in the order of SHA384,
          *    SHA256, SHA, MD5.
          * 4. Prefer the better performance of key exchange and digital
@@ -1055,18 +1012,6 @@ final class CipherSuite implements Comparable<CipherSuite> {
         add("TLS_DHE_DSS_WITH_AES_128_CBC_SHA",
             0x0032, --p, K_DHE_DSS,     B_AES_128, T);
 
-        // RC-4
-        add("TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
-            0xC007, --p, K_ECDHE_ECDSA, B_RC4_128, N);
-        add("TLS_ECDHE_RSA_WITH_RC4_128_SHA",
-            0xC011, --p, K_ECDHE_RSA,   B_RC4_128, N);
-        add("SSL_RSA_WITH_RC4_128_SHA",
-            0x0005, --p, K_RSA,         B_RC4_128, N);
-        add("TLS_ECDH_ECDSA_WITH_RC4_128_SHA",
-            0xC002, --p, K_ECDH_ECDSA,  B_RC4_128, N);
-        add("TLS_ECDH_RSA_WITH_RC4_128_SHA",
-            0xC00C, --p, K_ECDH_RSA,    B_RC4_128, N);
-
         // Cipher suites in GCM mode, see RFC 5288/5289.
         //
         // We may increase the priority of cipher suites in GCM mode when
@@ -1127,9 +1072,6 @@ final class CipherSuite implements Comparable<CipherSuite> {
         add("SSL_DHE_DSS_WITH_3DES_EDE_CBC_SHA",
             0x0013, --p, K_DHE_DSS,     B_3DES,    N);
 
-        add("SSL_RSA_WITH_RC4_128_MD5",
-            0x0004, --p, K_RSA,         B_RC4_128, N);
-
         // Renegotiation protection request Signalling Cipher Suite Value (SCSV)
         add("TLS_EMPTY_RENEGOTIATION_INFO_SCSV",
             0x00ff, --p, K_SCSV,        B_NULL,    T);
@@ -1146,7 +1088,7 @@ final class CipherSuite implements Comparable<CipherSuite> {
          * 2. If a cipher suite has been obsoleted, we put it at the end of
          *    the list.
          * 3. Prefer the stronger bulk cipher, in the order of AES_256,
-         *    AES_128, RC-4, 3DES-EDE, DES, RC4_40, DES40, NULL.
+         *    AES_128, 3DES-EDE, RC-4, DES, DES40, RC4_40, NULL.
          * 4. Prefer the stronger MAC algorithm, in the order of SHA384,
          *    SHA256, SHA, MD5.
          * 5. Prefer the better performance of key exchange and digital
@@ -1174,15 +1116,54 @@ final class CipherSuite implements Comparable<CipherSuite> {
         add("TLS_DH_anon_WITH_AES_128_CBC_SHA",
             0x0034, --p, K_DH_ANON,     B_AES_128, N);
 
+        add("TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA",
+            0xC017, --p, K_ECDH_ANON,   B_3DES,    N);
+        add("SSL_DH_anon_WITH_3DES_EDE_CBC_SHA",
+            0x001b, --p, K_DH_ANON,     B_3DES,    N);
+
+        // RC-4
+        add("TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+            0xC007, --p, K_ECDHE_ECDSA, B_RC4_128, N);
+        add("TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+            0xC011, --p, K_ECDHE_RSA,   B_RC4_128, N);
+        add("SSL_RSA_WITH_RC4_128_SHA",
+            0x0005, --p, K_RSA,         B_RC4_128, N);
+        add("TLS_ECDH_ECDSA_WITH_RC4_128_SHA",
+            0xC002, --p, K_ECDH_ECDSA,  B_RC4_128, N);
+        add("TLS_ECDH_RSA_WITH_RC4_128_SHA",
+            0xC00C, --p, K_ECDH_RSA,    B_RC4_128, N);
+        add("SSL_RSA_WITH_RC4_128_MD5",
+            0x0004, --p, K_RSA,         B_RC4_128, N);
+
         add("TLS_ECDH_anon_WITH_RC4_128_SHA",
             0xC016, --p, K_ECDH_ANON,   B_RC4_128, N);
         add("SSL_DH_anon_WITH_RC4_128_MD5",
             0x0018, --p, K_DH_ANON,     B_RC4_128, N);
 
-        add("TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA",
-            0xC017, --p, K_ECDH_ANON,   B_3DES,    N);
-        add("SSL_DH_anon_WITH_3DES_EDE_CBC_SHA",
-            0x001b, --p, K_DH_ANON,     B_3DES,    N);
+        // weak cipher suites obsoleted in TLS 1.2
+        add("SSL_RSA_WITH_DES_CBC_SHA",
+            0x0009, --p, K_RSA,         B_DES,     N, tls12);
+        add("SSL_DHE_RSA_WITH_DES_CBC_SHA",
+            0x0015, --p, K_DHE_RSA,     B_DES,     N, tls12);
+        add("SSL_DHE_DSS_WITH_DES_CBC_SHA",
+            0x0012, --p, K_DHE_DSS,     B_DES,     N, tls12);
+        add("SSL_DH_anon_WITH_DES_CBC_SHA",
+            0x001a, --p, K_DH_ANON,     B_DES,     N, tls12);
+
+        // weak cipher suites obsoleted in TLS 1.1
+        add("SSL_RSA_EXPORT_WITH_DES40_CBC_SHA",
+            0x0008, --p, K_RSA_EXPORT,  B_DES_40,  N, tls11);
+        add("SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
+            0x0014, --p, K_DHE_RSA,     B_DES_40,  N, tls11);
+        add("SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA",
+            0x0011, --p, K_DHE_DSS,     B_DES_40,  N, tls11);
+        add("SSL_DH_anon_EXPORT_WITH_DES40_CBC_SHA",
+            0x0019, --p, K_DH_ANON,     B_DES_40,  N, tls11);
+
+        add("SSL_RSA_EXPORT_WITH_RC4_40_MD5",
+            0x0003, --p, K_RSA_EXPORT,  B_RC4_40,  N, tls11);
+        add("SSL_DH_anon_EXPORT_WITH_RC4_40_MD5",
+            0x0017, --p, K_DH_ANON,     B_RC4_40,  N, tls11);
 
         add("TLS_RSA_WITH_NULL_SHA256",
             0x003b, --p, K_RSA,         B_NULL,    N, max, tls12, P_SHA256);
@@ -1201,52 +1182,27 @@ final class CipherSuite implements Comparable<CipherSuite> {
         add("SSL_RSA_WITH_NULL_MD5",
             0x0001, --p, K_RSA,         B_NULL,    N);
 
-        // weak cipher suites obsoleted in TLS 1.2
-        add("SSL_RSA_WITH_DES_CBC_SHA",
-            0x0009, --p, K_RSA,         B_DES,     N, tls12);
-        add("SSL_DHE_RSA_WITH_DES_CBC_SHA",
-            0x0015, --p, K_DHE_RSA,     B_DES,     N, tls12);
-        add("SSL_DHE_DSS_WITH_DES_CBC_SHA",
-            0x0012, --p, K_DHE_DSS,     B_DES,     N, tls12);
-        add("SSL_DH_anon_WITH_DES_CBC_SHA",
-            0x001a, --p, K_DH_ANON,     B_DES,     N, tls12);
-
-        // weak cipher suites obsoleted in TLS 1.1
-        add("SSL_RSA_EXPORT_WITH_RC4_40_MD5",
-            0x0003, --p, K_RSA_EXPORT,  B_RC4_40,  N, tls11);
-        add("SSL_DH_anon_EXPORT_WITH_RC4_40_MD5",
-            0x0017, --p, K_DH_ANON,     B_RC4_40,  N, tls11);
-
-        add("SSL_RSA_EXPORT_WITH_DES40_CBC_SHA",
-            0x0008, --p, K_RSA_EXPORT,  B_DES_40,  N, tls11);
-        add("SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
-            0x0014, --p, K_DHE_RSA,     B_DES_40,  N, tls11);
-        add("SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA",
-            0x0011, --p, K_DHE_DSS,     B_DES_40,  N, tls11);
-        add("SSL_DH_anon_EXPORT_WITH_DES40_CBC_SHA",
-            0x0019, --p, K_DH_ANON,     B_DES_40,  N, tls11);
-
         // Supported Kerberos ciphersuites from RFC2712
-        add("TLS_KRB5_WITH_RC4_128_SHA",
-            0x0020, --p, K_KRB5,        B_RC4_128, N);
-        add("TLS_KRB5_WITH_RC4_128_MD5",
-            0x0024, --p, K_KRB5,        B_RC4_128, N);
         add("TLS_KRB5_WITH_3DES_EDE_CBC_SHA",
             0x001f, --p, K_KRB5,        B_3DES,    N);
         add("TLS_KRB5_WITH_3DES_EDE_CBC_MD5",
             0x0023, --p, K_KRB5,        B_3DES,    N);
+        add("TLS_KRB5_WITH_RC4_128_SHA",
+            0x0020, --p, K_KRB5,        B_RC4_128, N);
+        add("TLS_KRB5_WITH_RC4_128_MD5",
+            0x0024, --p, K_KRB5,        B_RC4_128, N);
         add("TLS_KRB5_WITH_DES_CBC_SHA",
             0x001e, --p, K_KRB5,        B_DES,     N, tls12);
         add("TLS_KRB5_WITH_DES_CBC_MD5",
             0x0022, --p, K_KRB5,        B_DES,     N, tls12);
-        add("TLS_KRB5_EXPORT_WITH_RC4_40_SHA",
-            0x0028, --p, K_KRB5_EXPORT, B_RC4_40,  N, tls11);
-        add("TLS_KRB5_EXPORT_WITH_RC4_40_MD5",
-            0x002b, --p, K_KRB5_EXPORT, B_RC4_40,  N, tls11);
         add("TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA",
             0x0026, --p, K_KRB5_EXPORT, B_DES_40,  N, tls11);
         add("TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5",
             0x0029, --p, K_KRB5_EXPORT, B_DES_40,  N, tls11);
+        add("TLS_KRB5_EXPORT_WITH_RC4_40_SHA",
+            0x0028, --p, K_KRB5_EXPORT, B_RC4_40,  N, tls11);
+        add("TLS_KRB5_EXPORT_WITH_RC4_40_MD5",
+            0x002b, --p, K_KRB5_EXPORT, B_RC4_40,  N, tls11);
 
         /*
          * Other values from the TLS Cipher Suite Registry, as of August 2010.

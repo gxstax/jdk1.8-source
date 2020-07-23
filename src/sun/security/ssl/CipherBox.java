@@ -493,7 +493,9 @@ final class CipherBox {
 
                 if (protocolVersion.v >= ProtocolVersion.TLS11.v) {
                     if (newLen < blockSize) {
-                        throw new BadPaddingException("invalid explicit IV");
+                        throw new BadPaddingException("The length after " +
+                        "padding removal (" + newLen + ") should be larger " +
+                        "than <" + blockSize + "> since explicit IV used");
                     }
                 }
             }
@@ -503,7 +505,6 @@ final class CipherBox {
             throw new ArrayIndexOutOfBoundsException(e.toString());
         }
     }
-
 
     /*
      * Decrypts a block of data, returning the size of the
@@ -575,7 +576,9 @@ final class CipherBox {
                 // check the explicit IV of TLS v1.1 or later
                 if (protocolVersion.v >= ProtocolVersion.TLS11.v) {
                     if (newLen < blockSize) {
-                        throw new BadPaddingException("invalid explicit IV");
+                        throw new BadPaddingException("The length after " +
+                        "padding removal (" + newLen + ") should be larger " +
+                        "than <" + blockSize + "> since explicit IV used");
                     }
 
                     // reset the position to the end of the decrypted data
@@ -756,7 +759,9 @@ final class CipherBox {
             // so accept that as well
             // v3 does not require any particular value for the other bytes
             if (padLen > blockSize) {
-                throw new BadPaddingException("Invalid SSLv3 padding");
+                throw new BadPaddingException("Padding length (" +
+                padLen + ") of SSLv3 message should not be bigger " +
+                "than the block size (" + blockSize + ")");
             }
         }
         return newLen;
@@ -802,7 +807,9 @@ final class CipherBox {
             // so accept that as well
             // v3 does not require any particular value for the other bytes
             if (padLen > blockSize) {
-                throw new BadPaddingException("Invalid SSLv3 padding");
+                throw new BadPaddingException("Padding length (" +
+                padLen + ") of SSLv3 message should not be bigger " +
+                "than the block size (" + blockSize + ")");
             }
         }
 
@@ -925,7 +932,10 @@ final class CipherBox {
             case AEAD_CIPHER:
                 if (bb.remaining() < (recordIvSize + tagSize)) {
                     throw new BadPaddingException(
-                                        "invalid AEAD cipher fragment");
+                        "Insufficient buffer remaining for AEAD cipher " +
+                        "fragment (" + bb.remaining() + "). Needs to be " +
+                        "more than or equal to IV size (" + recordIvSize +
+                         ") + tag size (" + tagSize + ")");
                 }
 
                 // initialize the AEAD cipher for the unique IV
@@ -1042,40 +1052,6 @@ final class CipherBox {
         }
 
         return nonce;
-    }
-
-    /*
-     * Is this cipher available?
-     *
-     * This method can only be called by CipherSuite.BulkCipher.isAvailable()
-     * to test the availability of a cipher suites.  Please DON'T use it in
-     * other places, otherwise, the behavior may be unexpected because we may
-     * initialize AEAD cipher improperly in the method.
-     */
-    Boolean isAvailable() {
-        // We won't know whether a cipher for a particular key size is
-        // available until the cipher is successfully initialized.
-        //
-        // We do not initialize AEAD cipher in the constructor.  Need to
-        // initialize the cipher to ensure that the AEAD mode for a
-        // particular key size is supported.
-        if (cipherType == AEAD_CIPHER) {
-            try {
-                Authenticator authenticator =
-                    new Authenticator(protocolVersion);
-                byte[] nonce = authenticator.sequenceNumber();
-                byte[] iv = Arrays.copyOf(fixedIv,
-                                            fixedIv.length + nonce.length);
-                System.arraycopy(nonce, 0, iv, fixedIv.length, nonce.length);
-                GCMParameterSpec spec = new GCMParameterSpec(tagSize * 8, iv);
-
-                cipher.init(mode, key, spec, random);
-            } catch (Exception e) {
-                return Boolean.FALSE;
-            }
-        }   // Otherwise, we have initialized the cipher in the constructor.
-
-        return Boolean.TRUE;
     }
 
     /**

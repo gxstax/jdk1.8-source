@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,8 @@
 package sun.security.provider.certpath;
 
 import java.security.InvalidAlgorithmParameterException;
-import java.security.KeyStore;
 import java.security.PublicKey;
+import java.security.Timestamp;
 import java.security.cert.*;
 import java.security.interfaces.DSAPublicKey;
 import java.util.*;
@@ -86,6 +86,8 @@ class PKIX {
         private CertSelector constraints;
         private Set<TrustAnchor> anchors;
         private List<X509Certificate> certs;
+        private Timestamp timestamp;
+        private String variant;
 
         ValidatorParams(CertPath cp, PKIXParameters params)
             throws InvalidAlgorithmParameterException
@@ -101,6 +103,11 @@ class PKIX {
         ValidatorParams(PKIXParameters params)
             throws InvalidAlgorithmParameterException
         {
+            if (params instanceof PKIXExtendedParameters) {
+                timestamp = ((PKIXExtendedParameters) params).getTimestamp();
+                variant = ((PKIXExtendedParameters) params).getVariant();
+            }
+
             this.anchors = params.getTrustAnchors();
             // Make sure that none of the trust anchors include name constraints
             // (not supported).
@@ -190,11 +197,18 @@ class PKIX {
         PKIXParameters getPKIXParameters() {
             return params;
         }
+
+        Timestamp timestamp() {
+            return timestamp;
+        }
+
+        String variant() {
+            return variant;
+        }
     }
 
     static class BuilderParams extends ValidatorParams {
         private PKIXBuilderParameters params;
-        private boolean buildForward = true;
         private List<CertStore> stores;
         private X500Principal targetSubject;
 
@@ -213,10 +227,6 @@ class PKIX {
                     + "targetCertConstraints parameter must be an "
                     + "X509CertSelector");
             }
-            if (params instanceof SunCertPathBuilderParameters) {
-                buildForward =
-                    ((SunCertPathBuilderParameters)params).getBuildForward();
-            }
             this.params = params;
             this.targetSubject = getTargetSubject(
                 certStores(), (X509CertSelector)targetCertConstraints());
@@ -230,7 +240,6 @@ class PKIX {
             return stores;
         }
         int maxPathLength() { return params.getMaxPathLength(); }
-        boolean buildForward() { return buildForward; }
         PKIXBuilderParameters params() { return params; }
         X500Principal targetSubject() { return targetSubject; }
 

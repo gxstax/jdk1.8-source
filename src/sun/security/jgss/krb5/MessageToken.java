@@ -69,7 +69,7 @@ import java.security.MessageDigest;
  *
  * @author Mayank Upadhyay
  * @author Ram Marti
- * @see GSSHeader
+ * @see sun.security.jgss.GSSHeader
  */
 
 abstract class MessageToken extends Krb5Token {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,6 +59,8 @@ public class GSSUtil {
                 GSSUtil.createOid("1.2.840.113554.1.2.2");
     public static final Oid GSS_KRB5_MECH_OID2 =
                 GSSUtil.createOid("1.3.5.1.5.2");
+    public static final Oid GSS_KRB5_MECH_OID_MS =
+                GSSUtil.createOid("1.2.840.48018.1.2.2");
 
     public static final Oid GSS_SPNEGO_MECH_OID =
                 GSSUtil.createOid("1.3.6.1.5.5.2");
@@ -101,7 +103,8 @@ public class GSSUtil {
 
     public static boolean isKerberosMech(Oid oid) {
         return (GSS_KRB5_MECH_OID.equals(oid) ||
-                GSS_KRB5_MECH_OID2.equals(oid));
+                GSS_KRB5_MECH_OID2.equals(oid) ||
+                GSS_KRB5_MECH_OID_MS.equals(oid));
 
     }
 
@@ -267,24 +270,17 @@ public class GSSUtil {
      */
     public static boolean useSubjectCredsOnly(GSSCaller caller) {
 
-        // HTTP/SPNEGO doesn't use the standard JAAS framework. Instead, it
-        // uses the java.net.Authenticator style, therefore always return
-        // false here.
+        String propValue = GetPropertyAction.privilegedGetProperty(
+                "javax.security.auth.useSubjectCredsOnly");
+
+        // Invalid values should be ignored and the default assumed.
         if (caller instanceof HttpCaller) {
-            return false;
+            // Default for HTTP/SPNEGO is false.
+            return "true".equalsIgnoreCase(propValue);
+        } else {
+            // Default for JGSS is true.
+            return !("false".equalsIgnoreCase(propValue));
         }
-        /*
-         * Don't use GetBooleanAction because the default value in the JRE
-         * (when this is unset) has to treated as true.
-         */
-        String propValue = AccessController.doPrivileged(
-                new GetPropertyAction("javax.security.auth.useSubjectCredsOnly",
-                "true"));
-        /*
-         * This property has to be explicitly set to "false". Invalid
-         * values should be ignored and the default "true" assumed.
-         */
-        return (!propValue.equalsIgnoreCase("false"));
     }
 
     /**

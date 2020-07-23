@@ -259,9 +259,6 @@ public class SynthFileChooserUIImpl extends SynthFileChooserUI {
     // Home Button
     File homeDir = fsv.getHomeDirectory();
     String toolTipText = homeFolderToolTipText;
-    if (fsv.isRoot(homeDir)) {
-        toolTipText = getFileView(fc).getName(homeDir); // Probably "Desktop".
-    }
 
     JButton b = new JButton(homeFolderIcon);
     b.setToolTipText(toolTipText);
@@ -769,16 +766,9 @@ public class SynthFileChooserUIImpl extends SynthFileChooserUI {
                 fireIntervalRemoved(this, 0, oldSize);
             }
 
-            File[] baseFolders;
-            if (useShellFolder) {
-                baseFolders = AccessController.doPrivileged(new PrivilegedAction<File[]>() {
-                    public File[] run() {
-                        return (File[]) ShellFolder.get("fileChooserComboBoxFolders");
-                    }
-                });
-            } else {
-                baseFolders = fsv.getRoots();
-            }
+            File[] baseFolders = (useShellFolder)
+                    ? (File[]) ShellFolder.get("fileChooserComboBoxFolders")
+                    : fsv.getRoots();
             directories.addAll(Arrays.asList(baseFolders));
 
             // Get the canonical (full) path. This has the side

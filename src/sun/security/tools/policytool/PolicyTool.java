@@ -209,7 +209,7 @@ public class PolicyTool {
                                         UnrecoverableKeyException,
                                         NoSuchProviderException,
                                         ClassNotFoundException,
-                                        PropertyExpander.ExpandException,
+                                        ExpandException,
                                         InvocationTargetException {
 
         newWarning = false;

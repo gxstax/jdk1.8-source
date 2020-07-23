@@ -560,18 +560,8 @@ public abstract class RasterPrinterJob extends PrinterJob {
         }
 
         Media media = (Media)attSet.get(Media.class);
-        if (media == null) {
-            media =
-                (Media)service.getDefaultAttributeValue(Media.class);
-        }
-        if (!(media instanceof MediaSizeName)) {
-            media = MediaSizeName.NA_LETTER;
-        }
-        MediaSize size =
-            MediaSize.getMediaSizeForName((MediaSizeName)media);
-        if (size == null) {
-            size = MediaSize.NA.LETTER;
-        }
+        MediaSize size = getMediaSize(media, service, page);
+
         Paper paper = new Paper();
         float dim[] = size.getSize(1); //units == 1 to avoid FP error
         double w = Math.rint((dim[0]*72.0)/Size2DSyntax.INCH);
@@ -580,9 +570,11 @@ public abstract class RasterPrinterJob extends PrinterJob {
         MediaPrintableArea area =
              (MediaPrintableArea)
              attSet.get(MediaPrintableArea.class);
-        double ix, iw, iy, ih;
+        if (area == null) {
+            area = getDefaultPrintableArea(page, w, h);
+        }
 
-        if (area != null) {
+        double ix, iw, iy, ih;
             // Should pass in same unit as updatePageAttributes
             // to avoid rounding off errors.
             ix = Math.rint(
@@ -593,8 +585,25 @@ public abstract class RasterPrinterJob extends PrinterJob {
                            area.getWidth(MediaPrintableArea.INCH) * DPI);
             ih = Math.rint(
                            area.getHeight(MediaPrintableArea.INCH) * DPI);
+        paper.setImageableArea(ix, iy, iw, ih);
+        page.setPaper(paper);
+        return page;
         }
-        else {
+    protected MediaSize getMediaSize(Media media, PrintService service,
+            PageFormat page) {
+        if (media == null) {
+            media = (Media)service.getDefaultAttributeValue(Media.class);
+        }
+        if (!(media instanceof MediaSizeName)) {
+            media = MediaSizeName.NA_LETTER;
+        }
+        MediaSize size = MediaSize.getMediaSizeForName((MediaSizeName) media);
+        return size != null ? size : MediaSize.NA.LETTER;
+    }
+
+    protected MediaPrintableArea getDefaultPrintableArea(PageFormat page,
+            double w, double h) {
+        double ix, iw, iy, ih;
             if (w >= 72.0 * 6.0) {
                 ix = 72.0;
                 iw = w - 2 * 72.0;
@@ -609,10 +618,9 @@ public abstract class RasterPrinterJob extends PrinterJob {
                 iy = h / 6.0;
                 ih = h * 0.75;
             }
-        }
-        paper.setImageableArea(ix, iy, iw, ih);
-        page.setPaper(paper);
-        return page;
+
+        return new MediaPrintableArea((float) (ix / DPI), (float) (iy / DPI),
+                (float) (iw / DPI), (float) (ih / DPI), MediaPrintableArea.INCH);
     }
 
     protected void updatePageAttributes(PrintService service,
@@ -734,7 +742,19 @@ public abstract class RasterPrinterJob extends PrinterJob {
         }
         updatePageAttributes(service, page);
 
-        PageFormat newPage = pageDialog(attributes);
+        PageFormat newPage = null;
+        DialogTypeSelection dts =
+            (DialogTypeSelection)attributes.get(DialogTypeSelection.class);
+        if (dts == DialogTypeSelection.NATIVE) {
+            // Remove DialogTypeSelection.NATIVE to prevent infinite loop in
+            // RasterPrinterJob.
+            attributes.remove(DialogTypeSelection.class);
+            newPage = pageDialog(attributes);
+            // restore attribute
+            attributes.add(DialogTypeSelection.NATIVE);
+        } else {
+            newPage = pageDialog(attributes);
+        }
 
         if (newPage == null) {
             return page;
@@ -759,8 +779,17 @@ public abstract class RasterPrinterJob extends PrinterJob {
         // Check for native, note that default dialog is COMMON.
         if (dlg == DialogTypeSelection.NATIVE) {
             PrintService pservice = getPrintService();
-            PageFormat page = pageDialog(attributeToPageFormat(pservice,
-                                                               attributes));
+            PageFormat pageFrmAttrib = attributeToPageFormat(pservice,
+                                                             attributes);
+            setParentWindowID(attributes);
+            PageFormat page = pageDialog(pageFrmAttrib);
+            clearParentWindowID();
+
+            // If user cancels the dialog, pageDialog() will return the original
+            // page object and as per spec, we should return null in that case.
+            if (page == pageFrmAttrib) {
+                return null;
+            }
             updateAttributesWithPageFormat(pservice, page, attributes);
             return page;
         }
@@ -789,6 +818,10 @@ public abstract class RasterPrinterJob extends PrinterJob {
             return null;
         }
 
+        if (onTop != null) {
+            attributes.add(onTop);
+        }
+
         ServiceDialog pageDialog = new ServiceDialog(gc, x, y, service,
                                        DocFlavor.SERVICE_FORMATTED.PAGEABLE,
                                        attributes, (Frame)null);
@@ -810,12 +843,44 @@ public abstract class RasterPrinterJob extends PrinterJob {
         }
    }
 
-   protected PageFormat getPageFormatFromAttributes() {
-       if (attributes == null) {
+    protected PageFormat getPageFormatFromAttributes() {
+        Pageable pageable = null;
+        if (attributes == null || attributes.isEmpty() ||
+            !((pageable = getPageable()) instanceof OpenBook)) {
             return null;
         }
-        return attributeToPageFormat(getPrintService(), this.attributes);
-   }
+
+        PageFormat newPf = attributeToPageFormat(
+            getPrintService(), attributes);
+        PageFormat oldPf = null;
+        if ((oldPf = pageable.getPageFormat(0)) != null) {
+            // If orientation, media, imageable area attributes are not in
+            // "attributes" set, then use respective values of the existing
+            // page format "oldPf".
+            if (attributes.get(OrientationRequested.class) == null) {
+                newPf.setOrientation(oldPf.getOrientation());
+            }
+
+            Paper newPaper = newPf.getPaper();
+            Paper oldPaper = oldPf.getPaper();
+            boolean oldPaperValWasSet = false;
+            if (attributes.get(MediaSizeName.class) == null) {
+                newPaper.setSize(oldPaper.getWidth(), oldPaper.getHeight());
+                oldPaperValWasSet = true;
+            }
+            if (attributes.get(MediaPrintableArea.class) == null) {
+                newPaper.setImageableArea(
+                    oldPaper.getImageableX(), oldPaper.getImageableY(),
+                    oldPaper.getImageableWidth(),
+                    oldPaper.getImageableHeight());
+                oldPaperValWasSet = true;
+            }
+            if (oldPaperValWasSet) {
+                newPf.setPaper(newPaper);
+            }
+        }
+        return newPf;
+    }
 
 
    /**
@@ -853,7 +918,9 @@ public abstract class RasterPrinterJob extends PrinterJob {
 
             }
 
+            setParentWindowID(attributes);
             boolean ret = printDialog();
+            clearParentWindowID();
             this.attributes = attributes;
             return ret;
 
@@ -2409,6 +2476,28 @@ public abstract class RasterPrinterJob extends PrinterJob {
             return s; // no need to make a new String.
         } else {
             return new String(out_chars, 0, pos);
+        }
+    }
+
+    private DialogOnTop onTop = null;
+
+    private long parentWindowID = 0L;
+
+    /* Called from native code */
+    private long getParentWindowID() {
+        return parentWindowID;
+    }
+
+    private void clearParentWindowID() {
+        parentWindowID = 0L;
+        onTop = null;
+    }
+
+    private void setParentWindowID(PrintRequestAttributeSet attrs) {
+        parentWindowID = 0L;
+        onTop = (DialogOnTop)attrs.get(DialogOnTop.class);
+        if (onTop != null) {
+            parentWindowID = onTop.getID();
         }
     }
 }

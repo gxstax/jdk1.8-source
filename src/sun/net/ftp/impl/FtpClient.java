@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -116,8 +116,8 @@ public class FtpClient extends sun.net.ftp.FtpClient {
                 new PrivilegedAction<Object>() {
 
                     public Object run() {
-                        vals[0] = Integer.getInteger("sun.net.client.defaultReadTimeout", 0).intValue();
-                        vals[1] = Integer.getInteger("sun.net.client.defaultConnectTimeout", 0).intValue();
+                        vals[0] = Integer.getInteger("sun.net.client.defaultReadTimeout", 300_000).intValue();
+                        vals[1] = Integer.getInteger("sun.net.client.defaultConnectTimeout", 300_000).intValue();
                         encs[0] = System.getProperty("file.encoding", "ISO8859_1");
                         return null;
                     }
@@ -517,16 +517,23 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the command was successful
      * @throws IOException
      */
-    private boolean issueCommand(String cmd) throws IOException {
+    private boolean issueCommand(String cmd) throws IOException,
+            sun.net.ftp.FtpProtocolException {
         if (!isConnected()) {
             throw new IllegalStateException("Not connected");
         }
         if (replyPending) {
             try {
                 completePending();
-            } catch (FtpProtocolException e) {
+            } catch (sun.net.ftp.FtpProtocolException e) {
                 // ignore...
             }
+        }
+        if (cmd.indexOf('\n') != -1) {
+            sun.net.ftp.FtpProtocolException ex
+                    = new sun.net.ftp.FtpProtocolException("Illegal FTP command");
+            ex.initCause(new IllegalArgumentException("Illegal carriage return"));
+            throw ex;
         }
         sendServer(cmd + "\r\n");
         return readReply();
@@ -539,9 +546,9 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *
      * @throws FtpProtocolException if an error occurred
      */
-    private void issueCommandCheck(String cmd) throws FtpProtocolException, IOException {
+    private void issueCommandCheck(String cmd) throws sun.net.ftp.FtpProtocolException, IOException {
         if (!issueCommand(cmd)) {
-            throw new FtpProtocolException(cmd + ":" + getResponseString(), getLastReplyCode());
+            throw new sun.net.ftp.FtpProtocolException(cmd + ":" + getResponseString(), getLastReplyCode());
         }
     }
     private static Pattern epsvPat = null;
@@ -554,7 +561,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return the connected <code>Socket</code>
      * @throws IOException if the connection was unsuccessful.
      */
-    private Socket openPassiveDataConnection(String cmd) throws FtpProtocolException, IOException {
+    private Socket openPassiveDataConnection(String cmd) throws sun.net.ftp.FtpProtocolException, IOException {
         String serverAnswer;
         int port;
         InetSocketAddress dest = null;
@@ -586,7 +593,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
             }
             Matcher m = epsvPat.matcher(serverAnswer);
             if (!m.find()) {
-                throw new FtpProtocolException("EPSV failed : " + serverAnswer);
+                throw new sun.net.ftp.FtpProtocolException("EPSV failed : " + serverAnswer);
             }
             // Yay! Let's extract the port number
             String s = m.group(1);
@@ -623,7 +630,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
             }
             Matcher m = pasvPat.matcher(serverAnswer);
             if (!m.find()) {
-                throw new FtpProtocolException("PASV failed : " + serverAnswer);
+                throw new sun.net.ftp.FtpProtocolException("PASV failed : " + serverAnswer);
             }
             // Get port number out of group 2 & 3
             port = Integer.parseInt(m.group(3)) + (Integer.parseInt(m.group(2)) << 8);
@@ -678,7 +685,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
             try {
                 s = sslFact.createSocket(s, dest.getHostName(), dest.getPort(), true);
             } catch (Exception e) {
-                throw new FtpProtocolException("Can't open secure data channel: " + e);
+                throw new sun.net.ftp.FtpProtocolException("Can't open secure data channel: " + e);
             }
         }
         if (!issueCommand(cmd)) {
@@ -687,7 +694,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
                 // Ensure backward compatibility
                 throw new FileNotFoundException(cmd);
             }
-            throw new FtpProtocolException(cmd + ":" + getResponseString(), getLastReplyCode());
+            throw new sun.net.ftp.FtpProtocolException(cmd + ":" + getResponseString(), getLastReplyCode());
         }
         return s;
     }
@@ -700,13 +707,13 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return the connected <code>Socket</code>
      * @throws IOException if the connection or command failed
      */
-    private Socket openDataConnection(String cmd) throws FtpProtocolException, IOException {
+    private Socket openDataConnection(String cmd) throws sun.net.ftp.FtpProtocolException, IOException {
         Socket clientSocket;
 
         if (passiveMode) {
             try {
                 return openPassiveDataConnection(cmd);
-            } catch (FtpProtocolException e) {
+            } catch (sun.net.ftp.FtpProtocolException e) {
                 // If Passive mode failed, fall back on PORT
                 // Otherwise throw exception
                 String errmsg = e.getMessage();
@@ -723,7 +730,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
             // We're behind a firewall and the passive mode fail,
             // since we can't accept a connection through SOCKS (yet)
             // throw an exception
-            throw new FtpProtocolException("Passive mode failed");
+            throw new sun.net.ftp.FtpProtocolException("Passive mode failed");
         }
         // Bind the ServerSocket to the same address as the control channel
         // This is needed for multi-homed systems
@@ -994,7 +1001,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
         return server == null ? null : server.getRemoteSocketAddress();
     }
 
-    public sun.net.ftp.FtpClient connect(SocketAddress dest) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient connect(SocketAddress dest) throws sun.net.ftp.FtpProtocolException, IOException {
         return connect(dest, -1);
     }
 
@@ -1004,21 +1011,21 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @param dest the address of the destination server
      * @throws IOException if connection failed.
      */
-    public sun.net.ftp.FtpClient connect(SocketAddress dest, int timeout) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient connect(SocketAddress dest, int timeout) throws sun.net.ftp.FtpProtocolException, IOException {
         if (!(dest instanceof InetSocketAddress)) {
             throw new IllegalArgumentException("Wrong address type");
         }
         serverAddr = (InetSocketAddress) dest;
         tryConnect(serverAddr, timeout);
         if (!readReply()) {
-            throw new FtpProtocolException("Welcome message: " +
+            throw new sun.net.ftp.FtpProtocolException("Welcome message: " +
                     getResponseString(), lastReplyCode);
         }
         welcomeMsg = getResponseString().substring(4);
         return this;
     }
 
-    private void tryLogin(String user, char[] password) throws FtpProtocolException, IOException {
+    private void tryLogin(String user, char[] password) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("USER " + user);
 
         /*
@@ -1039,9 +1046,9 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the login was successful.
      * @throws IOException if an error occurred during the transmission
      */
-    public sun.net.ftp.FtpClient login(String user, char[] password) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient login(String user, char[] password) throws sun.net.ftp.FtpProtocolException, IOException {
         if (!isConnected()) {
-            throw new FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
+            throw new sun.net.ftp.FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
         }
         if (user == null || user.length() == 0) {
             throw new IllegalArgumentException("User name can't be null or empty");
@@ -1077,10 +1084,10 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the login was successful.
      * @throws IOException if an error occurs during the transmission.
      */
-    public sun.net.ftp.FtpClient login(String user, char[] password, String account) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient login(String user, char[] password, String account) throws sun.net.ftp.FtpProtocolException, IOException {
 
         if (!isConnected()) {
-            throw new FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
+            throw new sun.net.ftp.FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
         }
         if (user == null || user.length() == 0) {
             throw new IllegalArgumentException("User name can't be null or empty");
@@ -1120,7 +1127,10 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      */
     public void close() throws IOException {
         if (isConnected()) {
-            issueCommand("QUIT");
+            try {
+                issueCommand("QUIT");
+            } catch (FtpProtocolException e) {
+            }
             loggedIn = false;
         }
         disconnect();
@@ -1142,7 +1152,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the operation was successful.
      * @exception <code>FtpProtocolException</code>
      */
-    public sun.net.ftp.FtpClient changeDirectory(String remoteDirectory) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient changeDirectory(String remoteDirectory) throws sun.net.ftp.FtpProtocolException, IOException {
         if (remoteDirectory == null || "".equals(remoteDirectory)) {
             throw new IllegalArgumentException("directory can't be null or empty");
         }
@@ -1157,7 +1167,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the command was successful.
      * @throws IOException
      */
-    public sun.net.ftp.FtpClient changeToParentDirectory() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient changeToParentDirectory() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("CDUP");
         return this;
     }
@@ -1170,7 +1180,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         or <code>null</code>
      * @throws IOException
      */
-    public String getWorkingDirectory() throws FtpProtocolException, IOException {
+    public String getWorkingDirectory() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("PWD");
         /*
          * answer will be of the following format :
@@ -1217,7 +1227,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @param local the <code>OutputStream</code> the file should be written to.
      * @throws IOException if the transfer fails.
      */
-    public sun.net.ftp.FtpClient getFile(String name, OutputStream local) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient getFile(String name, OutputStream local) throws sun.net.ftp.FtpProtocolException, IOException {
         int mtu = 1500;
         if (restartOffset > 0) {
             Socket s;
@@ -1264,7 +1274,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         <code>null</code> if the command was unsuccessful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public InputStream getFileStream(String name) throws FtpProtocolException, IOException {
+    public InputStream getFileStream(String name) throws sun.net.ftp.FtpProtocolException, IOException {
         Socket s;
         if (restartOffset > 0) {
             try {
@@ -1314,7 +1324,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @throws IOException if an error occurred during the transmission.
      */
     public OutputStream putFileStream(String name, boolean unique)
-        throws FtpProtocolException, IOException
+        throws sun.net.ftp.FtpProtocolException, IOException
     {
         String cmd = unique ? "STOU " : "STOR ";
         Socket s = openDataConnection(cmd + name);
@@ -1343,7 +1353,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @throws IOException if an error occurred during the transmission.
      * @see #getLastFileName()
      */
-    public sun.net.ftp.FtpClient putFile(String name, InputStream local, boolean unique) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient putFile(String name, InputStream local, boolean unique) throws sun.net.ftp.FtpProtocolException, IOException {
         String cmd = unique ? "STOU " : "STOR ";
         int mtu = 1500;
         if (type == TransferType.BINARY) {
@@ -1373,7 +1383,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the transfer was successful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public sun.net.ftp.FtpClient appendFile(String name, InputStream local) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient appendFile(String name, InputStream local) throws sun.net.ftp.FtpProtocolException, IOException {
         int mtu = 1500;
         Socket s = openDataConnection("APPE " + name);
         OutputStream remote = createOutputStream(s.getOutputStream());
@@ -1395,7 +1405,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @param to the new name for the file
      * @throws IOException if the command fails
      */
-    public sun.net.ftp.FtpClient rename(String from, String to) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient rename(String from, String to) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("RNFR " + from);
         issueCommandCheck("RNTO " + to);
         return this;
@@ -1409,7 +1419,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the command was successful
      * @throws IOException if an error occurred during the exchange
      */
-    public sun.net.ftp.FtpClient deleteFile(String name) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient deleteFile(String name) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("DELE " + name);
         return this;
     }
@@ -1422,7 +1432,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the operation was successful.
      * @throws IOException if an error occurred during the exchange
      */
-    public sun.net.ftp.FtpClient makeDirectory(String name) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient makeDirectory(String name) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("MKD " + name);
         return this;
     }
@@ -1436,7 +1446,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the operation was successful.
      * @throws IOException if an error occurred during the exchange.
      */
-    public sun.net.ftp.FtpClient removeDirectory(String name) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient removeDirectory(String name) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("RMD " + name);
         return this;
     }
@@ -1447,7 +1457,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *
      * @throws FtpProtocolException if the command fails
      */
-    public sun.net.ftp.FtpClient noop() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient noop() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("NOOP");
         return this;
     }
@@ -1467,7 +1477,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         command failed.
      * @throws IOException if an error occurred during the transmission.
      */
-    public String getStatus(String name) throws FtpProtocolException, IOException {
+    public String getStatus(String name) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck((name == null ? "STAT" : "STAT " + name));
         /*
          * A typical response will be:
@@ -1516,7 +1526,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         if the command is not supported.
      * @throws IOException if an error occurs during the transmission.
      */
-    public List<String> getFeatures() throws FtpProtocolException, IOException {
+    public List<String> getFeatures() throws sun.net.ftp.FtpProtocolException, IOException {
         /*
          * The FEAT command, when implemented will return something like:
          *
@@ -1550,7 +1560,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the command was successful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public sun.net.ftp.FtpClient abort() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient abort() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("ABOR");
         // TODO: Must check the ReplyCode:
         /*
@@ -1606,11 +1616,11 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         action was pending.
      * @throws IOException
      */
-    public sun.net.ftp.FtpClient completePending() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient completePending() throws sun.net.ftp.FtpProtocolException, IOException {
         while (replyPending) {
             replyPending = false;
             if (!readReply()) {
-                throw new FtpProtocolException(getLastResponseString(), lastReplyCode);
+                throw new sun.net.ftp.FtpProtocolException(getLastResponseString(), lastReplyCode);
             }
         }
         return this;
@@ -1621,7 +1631,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *
      * @throws FtpProtocolException if the command fails
      */
-    public sun.net.ftp.FtpClient reInit() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient reInit() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("REIN");
         loggedIn = false;
         if (useCrypto) {
@@ -1652,7 +1662,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return This FtpClient
      * @throws IOException if an error occurs during transmission.
      */
-    public sun.net.ftp.FtpClient setType(TransferType type) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient setType(TransferType type) throws sun.net.ftp.FtpProtocolException, IOException {
         String cmd = "NOOP";
 
         this.type = type;
@@ -1682,7 +1692,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @see #changeDirectory(String)
      * @see #listFiles(String)
      */
-    public InputStream list(String path) throws FtpProtocolException, IOException {
+    public InputStream list(String path) throws sun.net.ftp.FtpProtocolException, IOException {
         Socket s;
         s = openDataConnection(path == null ? "LIST" : "LIST " + path);
         if (s != null) {
@@ -1706,9 +1716,9 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return the <code>InputStream</code> from the resulting data connection
      * @throws IOException if an error occurs during the transmission.
      */
-    public InputStream nameList(String path) throws FtpProtocolException, IOException {
+    public InputStream nameList(String path) throws sun.net.ftp.FtpProtocolException, IOException {
         Socket s;
-        s = openDataConnection("NLST " + path);
+        s = openDataConnection(path == null ? "NLST" : "NLST " + path);
         if (s != null) {
             return createInputStream(s.getInputStream());
         }
@@ -1728,7 +1738,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         {@link #getLastReplyCode()}.
      * @throws IOException if an error occurs during the transmission.
      */
-    public long getSize(String path) throws FtpProtocolException, IOException {
+    public long getSize(String path) throws sun.net.ftp.FtpProtocolException, IOException {
         if (path == null || path.length() == 0) {
             throw new IllegalArgumentException("path can't be null or empty");
         }
@@ -1765,7 +1775,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         can be checked with {@link #getLastReplyCode()}.
      * @throws IOException if an error occurs during the transmission.
      */
-    public Date getLastModified(String path) throws FtpProtocolException, IOException {
+    public Date getLastModified(String path) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("MDTM " + path);
         if (lastReplyCode == FtpReplyCode.FILE_STATUS) {
             String s = getResponseString().substring(4);
@@ -1875,12 +1885,12 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @see #setDirParser(FtpDirParser)
      * @see #changeDirectory(String)
      */
-    public Iterator<FtpDirEntry> listFiles(String path) throws FtpProtocolException, IOException {
+    public Iterator<FtpDirEntry> listFiles(String path) throws sun.net.ftp.FtpProtocolException, IOException {
         Socket s = null;
         BufferedReader sin = null;
         try {
             s = openDataConnection(path == null ? "MLSD" : "MLSD " + path);
-        } catch (FtpProtocolException FtpException) {
+        } catch (sun.net.ftp.FtpProtocolException FtpException) {
             // The server doesn't understand new MLSD command, ignore and fall
             // back to LIST
         }
@@ -1898,7 +1908,8 @@ public class FtpClient extends sun.net.ftp.FtpClient {
         return null;
     }
 
-    private boolean sendSecurityData(byte[] buf) throws IOException {
+    private boolean sendSecurityData(byte[] buf) throws IOException,
+            sun.net.ftp.FtpProtocolException {
         BASE64Encoder encoder = new BASE64Encoder();
         String s = encoder.encode(buf);
         return issueCommand("ADAT " + s);
@@ -1929,7 +1940,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if authentication was successful.
      * @throws IOException if an error occurs during the transmission.
      */
-    public sun.net.ftp.FtpClient useKerberos() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient useKerberos() throws sun.net.ftp.FtpProtocolException, IOException {
         /*
          * Comment out for the moment since it's not in use and would create
          * needless cross-package links.
@@ -2041,9 +2052,9 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @throws IOException if an error occurred during the transmission.
      * @see #endSecureSession()
      */
-    public sun.net.ftp.FtpClient startSecureSession() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient startSecureSession() throws sun.net.ftp.FtpProtocolException, IOException {
         if (!isConnected()) {
-            throw new FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
+            throw new sun.net.ftp.FtpProtocolException("Not connected yet", FtpReplyCode.BAD_SEQUENCE);
         }
         if (sslFact == null) {
             try {
@@ -2089,7 +2100,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @throws IOException if an error occurred during transmission.
      * @see #startSecureSession()
      */
-    public sun.net.ftp.FtpClient endSecureSession() throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient endSecureSession() throws sun.net.ftp.FtpProtocolException, IOException {
         if (!useCrypto) {
             return this;
         }
@@ -2119,7 +2130,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the operation was successful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public sun.net.ftp.FtpClient allocate(long size) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient allocate(long size) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("ALLO " + size);
         return this;
     }
@@ -2134,7 +2145,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the operation was successful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public sun.net.ftp.FtpClient structureMount(String struct) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient structureMount(String struct) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("SMNT " + struct);
         return this;
     }
@@ -2148,7 +2159,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         if the operation was not successful.
      * @throws IOException if an error occurred during the transmission.
      */
-    public String getSystem() throws FtpProtocolException, IOException {
+    public String getSystem() throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("SYST");
         /*
          * 215 UNIX Type: L8 Version: SUNOS
@@ -2168,7 +2179,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      *         server, or <code>null</code> if the command failed.
      * @throws IOException if an error occurred during transmission
      */
-    public String getHelp(String cmd) throws FtpProtocolException, IOException {
+    public String getHelp(String cmd) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("HELP " + cmd);
         /**
          *
@@ -2211,7 +2222,7 @@ public class FtpClient extends sun.net.ftp.FtpClient {
      * @return <code>true</code> if the command was successful.
      * @throws IOException if an error occurred during transmission
      */
-    public sun.net.ftp.FtpClient siteCmd(String cmd) throws FtpProtocolException, IOException {
+    public sun.net.ftp.FtpClient siteCmd(String cmd) throws sun.net.ftp.FtpProtocolException, IOException {
         issueCommandCheck("SITE " + cmd);
         return this;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@ import sun.security.ec.ECPrivateKeyImpl;
 import sun.security.ec.ECPublicKeyImpl;
 import sun.security.jca.JCAUtil;
 import sun.security.util.ECUtil;
+import static sun.security.util.SecurityProviderConstants.DEF_EC_KEY_SIZE;
 
 /**
  * EC keypair generator.
@@ -49,7 +50,6 @@ public final class ECKeyPairGenerator extends KeyPairGeneratorSpi {
 
     private static final int KEY_SIZE_MIN = 112; // min bits (see ecc_impl.h)
     private static final int KEY_SIZE_MAX = 571; // max bits (see ecc_impl.h)
-    private static final int KEY_SIZE_DEFAULT = 256;
 
     // used to seed the keypair generator
     private SecureRandom random;
@@ -65,7 +65,7 @@ public final class ECKeyPairGenerator extends KeyPairGeneratorSpi {
      */
     public ECKeyPairGenerator() {
         // initialize to default in case the app does not call initialize()
-        initialize(KEY_SIZE_DEFAULT, null);
+        initialize(DEF_EC_KEY_SIZE, null);
     }
 
     // initialize the generator. See JCA doc
@@ -125,19 +125,18 @@ public final class ECKeyPairGenerator extends KeyPairGeneratorSpi {
 
         try {
 
-            long[] handles = generateECKeyPair(keySize, encodedParams, seed);
+            Object[] keyBytes = generateECKeyPair(keySize, encodedParams, seed);
 
             // The 'params' object supplied above is equivalent to the native
             // one so there is no need to fetch it.
-
-            // handles[0] points to the native private key
-            BigInteger s = new BigInteger(1, getEncodedBytes(handles[0]));
+            // keyBytes[0] is the encoding of the native private key
+            BigInteger s = new BigInteger(1, (byte[])keyBytes[0]);
 
             PrivateKey privateKey =
                 new ECPrivateKeyImpl(s, (ECParameterSpec)params);
 
-            // handles[1] points to the native public key
-            ECPoint w = ECUtil.decodePoint(getEncodedBytes(handles[1]),
+            // keyBytes[1] is the encoding of the native public key
+            ECPoint w = ECUtil.decodePoint((byte[])keyBytes[1],
                 ((ECParameterSpec)params).getCurve());
             PublicKey publicKey =
                 new ECPublicKeyImpl(w, (ECParameterSpec)params);
@@ -162,14 +161,9 @@ public final class ECKeyPairGenerator extends KeyPairGeneratorSpi {
     }
 
     /*
-     * Generates the keypair and returns a 2-element array of handles.
-     * The first handle points to the private key, the second to the public key.
+     * Generates the keypair and returns a 2-element array of encoding bytes.
+     * The first one is for the private key, the second for the public key.
      */
-    private static native long[] generateECKeyPair(int keySize,
+    private static native Object[] generateECKeyPair(int keySize,
         byte[] encodedParams, byte[] seed) throws GeneralSecurityException;
-
-    /*
-     * Extracts the encoded key data using the supplied handle.
-     */
-    private static native byte[] getEncodedBytes(long handle);
 }

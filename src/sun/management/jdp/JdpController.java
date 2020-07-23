@@ -140,7 +140,7 @@ public final class JdpController {
             Field jvm = runtime.getClass().getDeclaredField("jvm");
             jvm.setAccessible(true);
 
-            VMManagement mgmt = (VMManagement) jvm.get(runtime);
+            VMManagement mgmt = (sun.management.VMManagement) jvm.get(runtime);
             Method pid_method = mgmt.getClass().getDeclaredMethod("getProcessId");
             pid_method.setAccessible(true);
             Integer pid = (Integer) pid_method.invoke(mgmt);

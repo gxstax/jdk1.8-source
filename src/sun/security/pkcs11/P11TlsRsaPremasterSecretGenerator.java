@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,6 +57,8 @@ final class P11TlsRsaPremasterSecretGenerator extends KeyGeneratorSpi {
     // mechanism id
     private long mechanism;
 
+    private int version;
+
     private TlsRsaPremasterSecretParameterSpec spec;
 
     P11TlsRsaPremasterSecretGenerator(Token token, String algorithm, long mechanism)
@@ -73,48 +75,47 @@ final class P11TlsRsaPremasterSecretGenerator extends KeyGeneratorSpi {
 
     protected void engineInit(AlgorithmParameterSpec params,
             SecureRandom random) throws InvalidAlgorithmParameterException {
-        if (params instanceof TlsRsaPremasterSecretParameterSpec == false) {
+        if (!(params instanceof TlsRsaPremasterSecretParameterSpec)) {
             throw new InvalidAlgorithmParameterException(MSG);
         }
         this.spec = (TlsRsaPremasterSecretParameterSpec)params;
+        version = (spec.getMajorVersion() << 8) | spec.getMinorVersion();
+        if ((version < 0x0300) && (version > 0x0303)) {
+            throw new InvalidAlgorithmParameterException
+                ("Only SSL 3.0, TLS 1.0, TLS 1.1, and TLS 1.2 are supported");
+        }
     }
 
     protected void engineInit(int keysize, SecureRandom random) {
         throw new InvalidParameterException(MSG);
     }
 
+    // Only can be used in client side to generate TLS RSA premaster secret.
     protected SecretKey engineGenerateKey() {
         if (spec == null) {
             throw new IllegalStateException
                         ("TlsRsaPremasterSecretGenerator must be initialized");
         }
 
-        byte[] b = spec.getEncodedSecret();
-        if (b == null) {
-            CK_VERSION version = new CK_VERSION(
+        CK_VERSION version = new CK_VERSION(
                         spec.getMajorVersion(), spec.getMinorVersion());
-            Session session = null;
-            try {
-                session = token.getObjSession();
-                CK_ATTRIBUTE[] attributes = token.getAttributes(
-                        O_GENERATE, CKO_SECRET_KEY,
-                        CKK_GENERIC_SECRET, new CK_ATTRIBUTE[0]);
-                long keyID = token.p11.C_GenerateKey(session.id(),
-                        new CK_MECHANISM(mechanism, version), attributes);
-                SecretKey key = P11Key.secretKey(session,
-                        keyID, "TlsRsaPremasterSecret", 48 << 3, attributes);
-                return key;
-            } catch (PKCS11Exception e) {
-                throw new ProviderException(
-                        "Could not generate premaster secret", e);
-            } finally {
-                token.releaseSession(session);
-            }
+        Session session = null;
+        try {
+            session = token.getObjSession();
+            CK_ATTRIBUTE[] attributes = token.getAttributes(
+                    O_GENERATE, CKO_SECRET_KEY,
+                    CKK_GENERIC_SECRET, new CK_ATTRIBUTE[0]);
+            long keyID = token.p11.C_GenerateKey(session.id(),
+                    new CK_MECHANISM(mechanism, version), attributes);
+            SecretKey key = P11Key.secretKey(session,
+                    keyID, "TlsRsaPremasterSecret", 48 << 3, attributes);
+            return key;
+        } catch (PKCS11Exception e) {
+            throw new ProviderException(
+                    "Could not generate premaster secret", e);
+        } finally {
+            token.releaseSession(session);
         }
-
-        // Won't worry, the TlsRsaPremasterSecret will be soon converted to
-        // TlsMasterSecret.
-        return new SecretKeySpec(b, "TlsRsaPremasterSecret");
     }
 
 }

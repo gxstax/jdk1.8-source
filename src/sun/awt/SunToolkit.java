@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,6 +36,9 @@ import java.awt.image.*;
 import java.awt.TrayIcon;
 import java.awt.SystemTray;
 import java.awt.event.InputEvent;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -43,12 +46,14 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import sun.awt.datatransfer.DataTransferer;
 import sun.security.util.SecurityConstants;
 import sun.util.logging.PlatformLogger;
 import sun.misc.SoftCache;
 import sun.font.FontDesignMetrics;
 import sun.awt.im.InputContext;
 import sun.awt.image.*;
+import sun.net.util.URLUtil;
 import sun.security.action.GetPropertyAction;
 import sun.security.action.GetBooleanAction;
 import java.lang.reflect.InvocationTargetException;
@@ -65,6 +70,9 @@ public abstract class SunToolkit extends Toolkit
         if (AccessController.doPrivileged(new GetBooleanAction("sun.awt.nativedebug"))) {
             DebugSettings.init();
         }
+        touchKeyboardAutoShowIsEnabled = Boolean.valueOf(
+            AccessController.doPrivileged(new GetPropertyAction(
+                "awt.touchKeyboardAutoShowIsEnabled", "true")));
     };
 
     /**
@@ -381,7 +389,7 @@ public abstract class SunToolkit extends Toolkit
      * null or the target can't be found, a null with be returned.
      */
     public static AppContext targetToAppContext(Object target) {
-        if (target == null || GraphicsEnvironment.isHeadless()) {
+        if (target == null) {
             return null;
         }
         AppContext context = getAppContext(target);
@@ -455,12 +463,10 @@ public abstract class SunToolkit extends Toolkit
      * via targetToAppContext() above.
      */
     public static void insertTargetMapping(Object target, AppContext appContext) {
-        if (!GraphicsEnvironment.isHeadless()) {
-            if (!setAppContext(target, appContext)) {
-                // Target is not a Component/MenuComponent, use the private Map
-                // instead.
-                appContextMap.put(target, appContext);
-            }
+        if (!setAppContext(target, appContext)) {
+            // Target is not a Component/MenuComponent, use the private Map
+            // instead.
+            appContextMap.put(target, appContext);
         }
     }
 
@@ -712,42 +718,19 @@ public abstract class SunToolkit extends Toolkit
     }
 
 
-    static final SoftCache imgCache = new SoftCache();
+    static final SoftCache fileImgCache = new SoftCache();
+
+    static final SoftCache urlImgCache = new SoftCache();
 
     static Image getImageFromHash(Toolkit tk, URL url) {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            try {
-                java.security.Permission perm =
-                    url.openConnection().getPermission();
-                if (perm != null) {
-                    try {
-                        sm.checkPermission(perm);
-                    } catch (SecurityException se) {
-                        // fallback to checkRead/checkConnect for pre 1.2
-                        // security managers
-                        if ((perm instanceof java.io.FilePermission) &&
-                            perm.getActions().indexOf("read") != -1) {
-                            sm.checkRead(perm.getName());
-                        } else if ((perm instanceof
-                            java.net.SocketPermission) &&
-                            perm.getActions().indexOf("connect") != -1) {
-                            sm.checkConnect(url.getHost(), url.getPort());
-                        } else {
-                            throw se;
-                        }
-                    }
-                }
-            } catch (java.io.IOException ioe) {
-                    sm.checkConnect(url.getHost(), url.getPort());
-            }
-        }
-        synchronized (imgCache) {
-            Image img = (Image)imgCache.get(url);
+        checkPermissions(url);
+        synchronized (urlImgCache) {
+            String key = url.toString();
+            Image img = (Image)urlImgCache.get(key);
             if (img == null) {
                 try {
                     img = tk.createImage(new URLImageSource(url));
-                    imgCache.put(url, img);
+                    urlImgCache.put(key, img);
                 } catch (Exception e) {
                 }
             }
@@ -757,16 +740,13 @@ public abstract class SunToolkit extends Toolkit
 
     static Image getImageFromHash(Toolkit tk,
                                                String filename) {
-        SecurityManager security = System.getSecurityManager();
-        if (security != null) {
-            security.checkRead(filename);
-        }
-        synchronized (imgCache) {
-            Image img = (Image)imgCache.get(filename);
+        checkPermissions(filename);
+        synchronized (fileImgCache) {
+            Image img = (Image)fileImgCache.get(filename);
             if (img == null) {
                 try {
                     img = tk.createImage(new FileImageSource(filename));
-                    imgCache.put(filename, img);
+                    fileImgCache.put(filename, img);
                 } catch (Exception e) {
                 }
             }
@@ -782,42 +762,43 @@ public abstract class SunToolkit extends Toolkit
         return getImageFromHash(this, url);
     }
 
-    public Image createImage(String filename) {
-        SecurityManager security = System.getSecurityManager();
-        if (security != null) {
-            security.checkRead(filename);
+    protected Image getImageWithResolutionVariant(String fileName,
+            String resolutionVariantName) {
+        synchronized (fileImgCache) {
+            Image image = getImageFromHash(this, fileName);
+            if (image instanceof MultiResolutionImage) {
+                return image;
+            }
+            Image resolutionVariant = getImageFromHash(this, resolutionVariantName);
+            image = createImageWithResolutionVariant(image, resolutionVariant);
+            fileImgCache.put(fileName, image);
+            return image;
         }
+    }
+
+    protected Image getImageWithResolutionVariant(URL url,
+            URL resolutionVariantURL) {
+        synchronized (urlImgCache) {
+            Image image = getImageFromHash(this, url);
+            if (image instanceof MultiResolutionImage) {
+                return image;
+            }
+            Image resolutionVariant = getImageFromHash(this, resolutionVariantURL);
+            image = createImageWithResolutionVariant(image, resolutionVariant);
+            String key = url.toString();
+            urlImgCache.put(key, image);
+            return image;
+        }
+    }
+
+
+    public Image createImage(String filename) {
+        checkPermissions(filename);
         return createImage(new FileImageSource(filename));
     }
 
     public Image createImage(URL url) {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            try {
-                java.security.Permission perm =
-                    url.openConnection().getPermission();
-                if (perm != null) {
-                    try {
-                        sm.checkPermission(perm);
-                    } catch (SecurityException se) {
-                        // fallback to checkRead/checkConnect for pre 1.2
-                        // security managers
-                        if ((perm instanceof java.io.FilePermission) &&
-                            perm.getActions().indexOf("read") != -1) {
-                            sm.checkRead(perm.getName());
-                        } else if ((perm instanceof
-                            java.net.SocketPermission) &&
-                            perm.getActions().indexOf("connect") != -1) {
-                            sm.checkConnect(url.getHost(), url.getPort());
-                        } else {
-                            throw se;
-                        }
-                    }
-                }
-            } catch (java.io.IOException ioe) {
-                    sm.checkConnect(url.getHost(), url.getPort());
-            }
-        }
+        checkPermissions(url);
         return createImage(new URLImageSource(url));
     }
 
@@ -827,6 +808,11 @@ public abstract class SunToolkit extends Toolkit
 
     public Image createImage(ImageProducer producer) {
         return new ToolkitImage(producer);
+    }
+
+    public static Image createImageWithResolutionVariant(Image image,
+            Image resolutionVariant) {
+        return new MultiResolutionToolkitImage(image, resolutionVariant);
     }
 
     public int checkImage(Image img, int w, int h, ImageObserver o) {
@@ -841,7 +827,7 @@ public abstract class SunToolkit extends Toolkit
         } else {
             repbits = tkimg.getImageRep().check(o);
         }
-        return tkimg.check(o) | repbits;
+        return (tkimg.check(o) | repbits) & checkResolutionVariant(img, w, h, o);
     }
 
     public boolean prepareImage(Image img, int w, int h, ImageObserver o) {
@@ -863,7 +849,113 @@ public abstract class SunToolkit extends Toolkit
             return false;
         }
         ImageRepresentation ir = tkimg.getImageRep();
-        return ir.prepare(o);
+        return ir.prepare(o) & prepareResolutionVariant(img, w, h, o);
+    }
+
+    private int checkResolutionVariant(Image img, int w, int h, ImageObserver o) {
+        ToolkitImage rvImage = getResolutionVariant(img);
+        int rvw = getRVSize(w);
+        int rvh = getRVSize(h);
+        // Ignore the resolution variant in case of error
+        return (rvImage == null || rvImage.hasError()) ? 0xFFFF :
+                checkImage(rvImage, rvw, rvh, MultiResolutionToolkitImage.
+                                getResolutionVariantObserver(
+                                        img, o, w, h, rvw, rvh, true));
+    }
+
+    private boolean prepareResolutionVariant(Image img, int w, int h,
+            ImageObserver o) {
+
+        ToolkitImage rvImage = getResolutionVariant(img);
+        int rvw = getRVSize(w);
+        int rvh = getRVSize(h);
+        // Ignore the resolution variant in case of error
+        return rvImage == null || rvImage.hasError() || prepareImage(
+                rvImage, rvw, rvh,
+                MultiResolutionToolkitImage.getResolutionVariantObserver(
+                        img, o, w, h, rvw, rvh, true));
+    }
+
+    private static int getRVSize(int size){
+        return size == -1 ? -1 : 2 * size;
+    }
+
+    private static ToolkitImage getResolutionVariant(Image image) {
+        if (image instanceof MultiResolutionToolkitImage) {
+            Image resolutionVariant = ((MultiResolutionToolkitImage) image).
+                    getResolutionVariant();
+            if (resolutionVariant instanceof ToolkitImage) {
+                return (ToolkitImage) resolutionVariant;
+            }
+        }
+        return null;
+    }
+
+    protected static boolean imageCached(String fileName) {
+        return fileImgCache.containsKey(fileName);
+    }
+
+    protected static boolean imageCached(URL url) {
+        String key = url.toString();
+        return urlImgCache.containsKey(key);
+    }
+
+    protected static boolean imageExists(String filename) {
+        if (filename != null) {
+            checkPermissions(filename);
+            return new File(filename).exists();
+        }
+        return false;
+    }
+
+    @SuppressWarnings("try")
+    protected static boolean imageExists(URL url) {
+        if (url != null) {
+            checkPermissions(url);
+            try (InputStream is = url.openStream()) {
+                return true;
+            }catch(IOException e){
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static void checkPermissions(String filename) {
+        SecurityManager security = System.getSecurityManager();
+        if (security != null) {
+            security.checkRead(filename);
+        }
+    }
+
+    private static void checkPermissions(URL url) {
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            try {
+                java.security.Permission perm =
+                    URLUtil.getConnectPermission(url);
+                if (perm != null) {
+                    try {
+                        sm.checkPermission(perm);
+                    } catch (SecurityException se) {
+                        // fallback to checkRead/checkConnect for pre 1.2
+                        // security managers
+                        if ((perm instanceof java.io.FilePermission) &&
+                            perm.getActions().indexOf("read") != -1) {
+                            sm.checkRead(perm.getName());
+                        } else if ((perm instanceof
+                            java.net.SocketPermission) &&
+                            perm.getActions().indexOf("connect") != -1) {
+                            sm.checkConnect(url.getHost(), url.getPort());
+                        } else {
+                            throw se;
+                        }
+                    }
+                }
+            } catch (IOException ioe) {
+                    sm.checkConnect(url.getHost(), url.getPort());
+            }
+        }
     }
 
     /**
@@ -1120,19 +1212,6 @@ public abstract class SunToolkit extends Toolkit
      */
     public Locale getDefaultKeyboardLocale() {
         return getStartupLocale();
-    }
-
-    private static String dataTransfererClassName = null;
-
-    protected static void setDataTransfererClassName(String className) {
-        dataTransfererClassName = className;
-    }
-
-    public static String getDataTransfererClassName() {
-        if (dataTransfererClassName == null) {
-            Toolkit.getDefaultToolkit(); // transferer set during toolkit init
-        }
-        return dataTransfererClassName;
     }
 
     // Support for window closing event notifications
@@ -1631,6 +1710,13 @@ public abstract class SunToolkit extends Toolkit
      */
     public abstract void ungrab(Window w);
 
+    public void showOrHideTouchKeyboard(Component comp, AWTEvent e) {}
+
+    private static boolean touchKeyboardAutoShowIsEnabled;
+
+    public static boolean isTouchKeyboardAutoShowEnabled() {
+        return touchKeyboardAutoShowIsEnabled;
+    }
 
     /**
      * Locates the splash screen library in a platform dependent way and closes
@@ -1985,6 +2071,19 @@ public abstract class SunToolkit extends Toolkit
             }
         }
         return isInstanceOf(cls.getSuperclass(), type);
+    }
+
+    protected static LightweightFrame getLightweightFrame(Component c) {
+        for (; c != null; c = c.getParent()) {
+            if (c instanceof LightweightFrame) {
+                return (LightweightFrame)c;
+            }
+            if (c instanceof Window) {
+                // Don't traverse owner windows
+                return null;
+            }
+        }
+        return null;
     }
 
     ///////////////////////////////////////////////////////////////////////////

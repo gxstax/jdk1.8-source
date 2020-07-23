@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,6 +48,7 @@ import sun.security.x509.X509Key;
 public final class RSAPublicKeyImpl extends X509Key implements RSAPublicKey {
 
     private static final long serialVersionUID = 2644735423591199609L;
+    private static final BigInteger THREE = BigInteger.valueOf(3);
 
     private BigInteger n;       // modulus
     private BigInteger e;       // public exponent
@@ -61,6 +62,7 @@ public final class RSAPublicKeyImpl extends X509Key implements RSAPublicKey {
         this.n = n;
         this.e = e;
         RSAKeyFactory.checkRSAProviderKeyLengths(n.bitLength(), e);
+        checkExponentRange();
         // generate the encoding
         algid = RSAPrivateCrtKeyImpl.rsaId;
         try {
@@ -83,6 +85,19 @@ public final class RSAPublicKeyImpl extends X509Key implements RSAPublicKey {
     public RSAPublicKeyImpl(byte[] encoded) throws InvalidKeyException {
         decode(encoded);
         RSAKeyFactory.checkRSAProviderKeyLengths(n.bitLength(), e);
+        checkExponentRange();
+    }
+
+    private void checkExponentRange() throws InvalidKeyException {
+        // the exponent should be smaller than the modulus
+        if (e.compareTo(n) >= 0) {
+            throw new InvalidKeyException("exponent is larger than modulus");
+        }
+
+        // the exponent should be at least 3
+        if (e.compareTo(THREE) < 0) {
+            throw new InvalidKeyException("exponent is smaller than 3");
+        }
     }
 
     // see JCA doc
@@ -111,8 +126,8 @@ public final class RSAPublicKeyImpl extends X509Key implements RSAPublicKey {
                 throw new IOException("Not a SEQUENCE");
             }
             DerInputStream data = derValue.data;
-            n = RSAPrivateCrtKeyImpl.getBigInteger(data);
-            e = RSAPrivateCrtKeyImpl.getBigInteger(data);
+            n = data.getPositiveBigInteger();
+            e = data.getPositiveBigInteger();
             if (derValue.data.available() != 0) {
                 throw new IOException("Extra data available");
             }

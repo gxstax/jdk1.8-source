@@ -26,15 +26,11 @@
 package java.lang;
 
 import java.security.*;
-import java.io.FileDescriptor;
 import java.io.File;
 import java.io.FilePermission;
 import java.awt.AWTPermission;
 import java.util.PropertyPermission;
-import java.lang.RuntimePermission;
 import java.net.SocketPermission;
-import java.net.NetPermission;
-import java.util.Hashtable;
 import java.net.InetAddress;
 import java.lang.reflect.*;
 import java.net.URL;

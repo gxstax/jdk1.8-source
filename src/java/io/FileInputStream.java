@@ -51,6 +51,12 @@ class FileInputStream extends InputStream
     /* File Descriptor - handle to the open file */
     private final FileDescriptor fd;
 
+    /**
+     * The path of the referenced file
+     * (null if the stream is created with a file descriptor)
+     */
+    private final String path;
+
     private FileChannel channel = null;
 
     private final Object closeLock = new Object();
@@ -128,6 +134,7 @@ class FileInputStream extends InputStream
         }
         fd = new FileDescriptor();
         fd.attach(this);
+        path = name;
         open(name);
     }
 
@@ -164,6 +171,7 @@ class FileInputStream extends InputStream
             security.checkRead(fdObj);
         }
         fd = fdObj;
+        path = null;
 
         /*
          * FileDescriptor is being shared by streams.
@@ -176,7 +184,16 @@ class FileInputStream extends InputStream
      * Opens the specified file for reading.
      * @param name the name of the file
      */
-    private native void open(String name) throws FileNotFoundException;
+    private native void open0(String name) throws FileNotFoundException;
+
+    // wrap native call to allow instrumentation
+    /**
+     * Opens the specified file for reading.
+     * @param name the name of the file
+     */
+    private void open(String name) throws FileNotFoundException {
+        open0(name);
+    }
 
     /**
      * Reads a byte of data from this input stream. This method blocks
@@ -186,7 +203,11 @@ class FileInputStream extends InputStream
      *             file is reached.
      * @exception  IOException  if an I/O error occurs.
      */
-    public native int read() throws IOException;
+    public int read() throws IOException {
+        return read0();
+    }
+
+    private native int read0() throws IOException;
 
     /**
      * Reads a subarray as a sequence of bytes.
@@ -258,7 +279,11 @@ class FileInputStream extends InputStream
      * @exception  IOException  if n is negative, if the stream does not
      *             support seek, or if an I/O error occurs.
      */
-    public native long skip(long n) throws IOException;
+    public long skip(long n) throws IOException {
+        return skip0(n);
+    }
+
+    private native long skip0(long n) throws IOException;
 
     /**
      * Returns an estimate of the number of remaining bytes that can be read (or
@@ -277,7 +302,11 @@ class FileInputStream extends InputStream
      * @exception  IOException  if this file input stream has been closed by calling
      *             {@code close} or an I/O error occurs.
      */
-    public native int available() throws IOException;
+    public int available() throws IOException {
+        return available0();
+    }
+
+    private native int available0() throws IOException;
 
     /**
      * Closes this file input stream and releases any system resources
@@ -345,7 +374,7 @@ class FileInputStream extends InputStream
     public FileChannel getChannel() {
         synchronized (this) {
             if (channel == null) {
-                channel = FileChannelImpl.open(fd, true, false, this);
+                channel = FileChannelImpl.open(fd, path, true, false, this);
             }
             return channel;
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,9 @@
  */
 
 package sun.security.ssl;
+
+import java.util.*;
+import java.security.CryptoPrimitive;
 
 /**
  * Type safe enum for an SSL/TLS protocol version. Instances are obtained
@@ -86,6 +89,11 @@ public final class ProtocolVersion implements Comparable<ProtocolVersion> {
     // Default version for hello messages (SSLv2Hello)
     final static ProtocolVersion DEFAULT_HELLO = FIPS ? TLS10 : SSL30;
 
+    // Available protocols
+    //
+    // Including all supported protocols except the disabled ones.
+    final static Set<ProtocolVersion> availableProtocols;
+
     // version in 16 bit MSB format as it appears in records and
     // messages, i.e. 0x0301 for TLS 1.0
     public final int v;
@@ -96,12 +104,30 @@ public final class ProtocolVersion implements Comparable<ProtocolVersion> {
     // name used in JSSE (e.g. TLSv1 for TLS 1.0)
     final String name;
 
+    // Initialize the available protocols.
+    static {
+        Set<ProtocolVersion> protocols = new HashSet<>(5);
+
+        ProtocolVersion[] pvs = new ProtocolVersion[] {
+                SSL20Hello, SSL30, TLS10, TLS11, TLS12};
+        for (ProtocolVersion p : pvs) {
+            if (SSLAlgorithmConstraints.DEFAULT_SSL_ONLY.permits(
+                    EnumSet.of(CryptoPrimitive.KEY_AGREEMENT),
+                    p.name, null)) {
+                protocols.add(p);
+            }
+        }
+
+        availableProtocols =
+                Collections.<ProtocolVersion>unmodifiableSet(protocols);
+    }
+
     // private
     private ProtocolVersion(int v, String name) {
         this.v = v;
         this.name = name;
         major = (byte)(v >>> 8);
-        minor = (byte)(v & 0xff);
+        minor = (byte)(v & 0xFF);
     }
 
     // private
@@ -117,8 +143,8 @@ public final class ProtocolVersion implements Comparable<ProtocolVersion> {
         } else if (v == SSL20Hello.v) {
             return SSL20Hello;
         } else {
-            int major = (v >>> 8) & 0xff;
-            int minor = v & 0xff;
+            int major = (v >>> 8) & 0xFF;
+            int minor = v & 0xFF;
             return new ProtocolVersion(v, "Unknown-" + major + "." + minor);
         }
     }
@@ -128,10 +154,7 @@ public final class ProtocolVersion implements Comparable<ProtocolVersion> {
      * numbers. Never throws exceptions.
      */
     public static ProtocolVersion valueOf(int major, int minor) {
-        major &= 0xff;
-        minor &= 0xff;
-        int v = (major << 8) | minor;
-        return valueOf(v);
+        return valueOf(((major & 0xFF) << 8) | (minor & 0xFF));
     }
 
     /**

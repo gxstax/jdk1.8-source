@@ -39,7 +39,7 @@ import java.util.Date;
  * to ensure that the logging support is {@linkplain #isAvailable available}
  * before invoking it.
  *
- * @see PlatformLogger if you want to log messages even
+ * @see sun.util.logging.PlatformLogger if you want to log messages even
  * if the logging support is not available
  */
 public class LoggingSupport {

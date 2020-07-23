@@ -156,7 +156,7 @@ public class Handler extends URLStreamHandler {
             int bangSlash = indexOfBangSlash(file);
             String toBangSlash = file.substring(0, bangSlash);
             String afterBangSlash = file.substring(bangSlash);
-            ParseUtil canonizer = new ParseUtil();
+            sun.net.www.ParseUtil canonizer = new ParseUtil();
             afterBangSlash = canonizer.canonizeString(afterBangSlash);
             file = toBangSlash + afterBangSlash;
         }

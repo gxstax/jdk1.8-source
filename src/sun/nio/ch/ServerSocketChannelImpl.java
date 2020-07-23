@@ -133,6 +133,14 @@ class ServerSocketChannelImpl
         synchronized (stateLock) {
             if (!isOpen())
                 throw new ClosedChannelException();
+
+            if (name == StandardSocketOptions.IP_TOS) {
+                ProtocolFamily family = Net.isIPv6Available() ?
+                    StandardProtocolFamily.INET6 : StandardProtocolFamily.INET;
+                Net.setSocketOption(fd, family, name, value);
+                return this;
+            }
+
             if (name == StandardSocketOptions.SO_REUSEADDR &&
                     Net.useExclusiveBind())
             {
@@ -177,6 +185,7 @@ class ServerSocketChannelImpl
             HashSet<SocketOption<?>> set = new HashSet<SocketOption<?>>(2);
             set.add(StandardSocketOptions.SO_RCVBUF);
             set.add(StandardSocketOptions.SO_REUSEADDR);
+            set.add(StandardSocketOptions.IP_TOS);
             return Collections.unmodifiableSet(set);
         }
     }
@@ -238,7 +247,7 @@ class ServerSocketChannelImpl
                     return null;
                 thread = NativeThread.current();
                 for (;;) {
-                    n = accept0(this.fd, newfd, isaa);
+                    n = accept(this.fd, newfd, isaa);
                     if ((n == IOStatus.INTERRUPTED) && isOpen())
                         continue;
                     break;
@@ -309,21 +318,20 @@ class ServerSocketChannelImpl
         int oldOps = sk.nioReadyOps();
         int newOps = initialOps;
 
-        if ((ops & PollArrayWrapper.POLLNVAL) != 0) {
+        if ((ops & Net.POLLNVAL) != 0) {
             // This should only happen if this channel is pre-closed while a
             // selection operation is in progress
             // ## Throw an error if this channel has not been pre-closed
             return false;
         }
 
-        if ((ops & (PollArrayWrapper.POLLERR
-                    | PollArrayWrapper.POLLHUP)) != 0) {
+        if ((ops & (Net.POLLERR | Net.POLLHUP)) != 0) {
             newOps = intOps;
             sk.nioReadyOps(newOps);
             return (newOps & ~oldOps) != 0;
         }
 
-        if (((ops & PollArrayWrapper.POLLIN) != 0) &&
+        if (((ops & Net.POLLIN) != 0) &&
             ((intOps & SelectionKey.OP_ACCEPT) != 0))
                 newOps |= SelectionKey.OP_ACCEPT;
 
@@ -369,7 +377,7 @@ class ServerSocketChannelImpl
 
         // Translate ops
         if ((ops & SelectionKey.OP_ACCEPT) != 0)
-            newOps |= PollArrayWrapper.POLLIN;
+            newOps |= Net.POLLIN;
         // Place ops into pollfd array
         sk.selector.putEventOps(sk, newOps);
     }
@@ -400,6 +408,18 @@ class ServerSocketChannelImpl
         }
         sb.append(']');
         return sb.toString();
+    }
+
+    /**
+     * Accept a connection on a socket.
+     *
+     * @implNote Wrap native call to allow instrumentation.
+     */
+    private int accept(FileDescriptor ssfd, FileDescriptor newfd,
+                       InetSocketAddress[] isaa)
+        throws IOException
+    {
+        return accept0(ssfd, newfd, isaa);
     }
 
     // -- Native methods --

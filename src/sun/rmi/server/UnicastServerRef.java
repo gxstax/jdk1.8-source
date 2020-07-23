@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,10 +27,12 @@ package sun.rmi.server;
 
 import java.io.IOException;
 import java.io.ObjectInput;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
-import java.io.PrintStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.rmi.AccessException;
 import java.rmi.MarshalException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
@@ -38,6 +40,7 @@ import java.rmi.ServerError;
 import java.rmi.ServerException;
 import java.rmi.UnmarshalException;
 import java.rmi.server.ExportException;
+import java.rmi.server.Operation;
 import java.rmi.server.RemoteCall;
 import java.rmi.server.RemoteRef;
 import java.rmi.server.RemoteStub;
@@ -52,8 +55,11 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import sun.misc.ObjectInputFilter;
 import sun.rmi.runtime.Log;
 import sun.rmi.transport.LiveRef;
+import sun.rmi.transport.StreamRemoteCall;
 import sun.rmi.transport.Target;
 import sun.rmi.transport.tcp.TCPTransport;
 import sun.security.action.GetBooleanAction;
@@ -62,6 +68,10 @@ import sun.security.action.GetBooleanAction;
  * UnicastServerRef implements the remote reference layer server-side
  * behavior for remote objects exported with the "UnicastRef" reference
  * type.
+ * If an {@link ObjectInputFilter ObjectInputFilter} is supplied it is
+ * invoked during deserialization to filter the arguments,
+ * otherwise the default filter of {@link ObjectInputStream ObjectInputStream}
+ * applies.
  *
  * @author  Ann Wollrath
  * @author  Roger Riggs
@@ -104,6 +114,9 @@ public class UnicastServerRef extends UnicastRef
      */
     private transient Skeleton skel;
 
+    // The ObjectInputFilter for checking the invocation arguments
+    private final transient ObjectInputFilter filter;
+
     /** maps method hash to Method object for each remote method */
     private transient Map<Long,Method> hashToMethod_Map = null;
 
@@ -118,18 +131,33 @@ public class UnicastServerRef extends UnicastRef
     private static final Map<Class<?>,?> withoutSkeletons =
         Collections.synchronizedMap(new WeakHashMap<Class<?>,Void>());
 
+    private final AtomicInteger methodCallIDCount = new AtomicInteger(0);
+
     /**
      * Create a new (empty) Unicast server remote reference.
+     * The filter is null to defer to the  default ObjectInputStream filter, if any.
      */
     public UnicastServerRef() {
+        this.filter = null;
     }
 
     /**
      * Construct a Unicast server remote reference for a specified
      * liveRef.
+     * The filter is null to defer to the  default ObjectInputStream filter, if any.
      */
     public UnicastServerRef(LiveRef ref) {
         super(ref);
+        this.filter = null;
+    }
+
+    /**
+     * Construct a Unicast server remote reference for a specified
+     * liveRef and filter.
+     */
+    public UnicastServerRef(LiveRef ref, ObjectInputFilter filter) {
+        super(ref);
+        this.filter = filter;
     }
 
     /**
@@ -138,6 +166,7 @@ public class UnicastServerRef extends UnicastRef
      */
     public UnicastServerRef(int port) {
         super(new LiveRef(port));
+        this.filter = null;
     }
 
     /**
@@ -263,20 +292,24 @@ public class UnicastServerRef extends UnicastRef
             try {
                 in = call.getInputStream();
                 num = in.readInt();
-                if (num >= 0) {
-                    if (skel != null) {
-                        oldDispatch(obj, call, num);
-                        return;
-                    } else {
-                        throw new UnmarshalException(
-                            "skeleton class not found but required " +
-                            "for client version");
-                    }
-                }
-                op = in.readLong();
             } catch (Exception readEx) {
                 throw new UnmarshalException("error unmarshalling call header",
                                              readEx);
+            }
+            if (skel != null) {
+                // If there is a skeleton, use it
+                    oldDispatch(obj, call, num);
+                    return;
+
+            } else if (num >= 0){
+                throw new UnmarshalException(
+                        "skeleton class not found but required for client version");
+            }
+            try {
+                op = in.readLong();
+            } catch (Exception readEx) {
+                throw new UnmarshalException("error unmarshalling call header",
+                        readEx);
             }
 
             /*
@@ -299,18 +332,19 @@ public class UnicastServerRef extends UnicastRef
             logCall(obj, method);
 
             // unmarshal parameters
-            Class<?>[] types = method.getParameterTypes();
-            Object[] params = new Object[types.length];
-
+            Object[] params = null;
             try {
                 unmarshalCustomCallData(in);
-                for (int i = 0; i < types.length; i++) {
-                    params[i] = unmarshalValue(types[i], in);
-                }
-            } catch (IOException e) {
-                throw new UnmarshalException(
-                    "error unmarshalling arguments", e);
-            } catch (ClassNotFoundException e) {
+                params = unmarshalParameters(obj, method, marshalStream);
+
+            } catch (AccessException aex) {
+                // For compatibility, AccessException is not wrapped in UnmarshalException
+                // disable saving any refs in the inputStream for GC
+                ((StreamRemoteCall) call).discardPendingRefs();
+                throw aex;
+            } catch (IOException | ClassNotFoundException e) {
+                // disable saving any refs in the inputStream for GC
+                ((StreamRemoteCall) call).discardPendingRefs();
                 throw new UnmarshalException(
                     "error unmarshalling arguments", e);
             } finally {
@@ -344,6 +378,7 @@ public class UnicastServerRef extends UnicastRef
                  */
             }
         } catch (Throwable e) {
+            Throwable origEx = e;
             logCallException(e);
 
             ObjectOutput out = call.getResultStream(false);
@@ -359,76 +394,79 @@ public class UnicastServerRef extends UnicastRef
                 clearStackTraces(e);
             }
             out.writeObject(e);
+
+            // AccessExceptions should cause Transport.serviceCall
+            // to flag the connection as unusable.
+            if (origEx instanceof AccessException) {
+                throw new IOException("Connection is not reusable", origEx);
+            }
         } finally {
             call.releaseInputStream(); // in case skeleton doesn't
             call.releaseOutputStream();
         }
     }
 
+    /**
+     * Sets a filter for invocation arguments, if a filter has been set.
+     * Called by dispatch before the arguments are read.
+     */
     protected void unmarshalCustomCallData(ObjectInput in)
-        throws IOException, ClassNotFoundException
-    {}
+            throws IOException, ClassNotFoundException {
+        if (filter != null &&
+                in instanceof ObjectInputStream) {
+            // Set the filter on the stream
+            ObjectInputStream ois = (ObjectInputStream) in;
+
+            AccessController.doPrivileged(new PrivilegedAction<Void>() {
+                @Override
+                public Void run() {
+                    ObjectInputFilter.Config.setObjectInputFilter(ois, filter);
+                    return null;
+                }
+            });
+        }
+    }
 
     /**
      * Handle server-side dispatch using the RMI 1.1 stub/skeleton
-     * protocol, given a non-negative operation number that has
-     * already been read from the call stream.
+     * protocol, given a non-negative operation number or negative method hash
+     * that has already been read from the call stream.
+     * Exceptions are handled by the caller to be sent to the remote client.
      *
      * @param obj the target remote object for the call
      * @param call the "remote call" from which operation and
      * method arguments can be obtained.
      * @param op the operation number
-     * @exception IOException if unable to marshal return result or
+     * @throws Exception if unable to marshal return result or
      * release input or output streams
      */
-    public void oldDispatch(Remote obj, RemoteCall call, int op)
-        throws IOException
+    private void oldDispatch(Remote obj, RemoteCall call, int op)
+        throws Exception
     {
         long hash;              // hash for matching stub with skeleton
 
+        // read remote call header
+        ObjectInput in;
+        in = call.getInputStream();
         try {
-            // read remote call header
-            ObjectInput in;
-            try {
-                in = call.getInputStream();
-                try {
-                    Class<?> clazz = Class.forName("sun.rmi.transport.DGCImpl_Skel");
-                    if (clazz.isAssignableFrom(skel.getClass())) {
-                        ((MarshalInputStream)in).useCodebaseOnly();
-                    }
-                } catch (ClassNotFoundException ignore) { }
-                hash = in.readLong();
-            } catch (Exception readEx) {
-                throw new UnmarshalException("error unmarshalling call header",
-                                             readEx);
+            Class<?> clazz = Class.forName("sun.rmi.transport.DGCImpl_Skel");
+            if (clazz.isAssignableFrom(skel.getClass())) {
+                ((MarshalInputStream)in).useCodebaseOnly();
             }
+        } catch (ClassNotFoundException ignore) { }
 
-            // if calls are being logged, write out object id and operation
-            logCall(obj, skel.getOperations()[op]);
-            unmarshalCustomCallData(in);
-            // dispatch to skeleton for remote object
-            skel.dispatch(obj, call, op, hash);
-
-        } catch (Throwable e) {
-            logCallException(e);
-
-            ObjectOutput out = call.getResultStream(false);
-            if (e instanceof Error) {
-                e = new ServerError(
-                    "Error occurred in server thread", (Error) e);
-            } else if (e instanceof RemoteException) {
-                e = new ServerException(
-                    "RemoteException occurred in server thread",
-                    (Exception) e);
-            }
-            if (suppressStackTraces) {
-                clearStackTraces(e);
-            }
-            out.writeObject(e);
-        } finally {
-            call.releaseInputStream(); // in case skeleton doesn't
-            call.releaseOutputStream();
+        try {
+            hash = in.readLong();
+        } catch (Exception ioe) {
+            throw new UnmarshalException("error unmarshalling call header", ioe);
         }
+
+        // if calls are being logged, write out object id and operation
+        Operation[] operations = skel.getOperations();
+        logCall(obj, op >= 0 && op < operations.length ?  operations[op] : "op: " + op);
+        unmarshalCustomCallData(in);
+        // dispatch to skeleton for remote object
+        skel.dispatch(obj, call, op, hash);
     }
 
     /**
@@ -479,7 +517,7 @@ public class UnicastServerRef extends UnicastRef
 
         // write exceptions (only) to System.err if desired
         if (wantExceptionLog) {
-            PrintStream log = System.err;
+            java.io.PrintStream log = System.err;
             synchronized (log) {
                 log.println();
                 log.println("Exception dispatching call to " +
@@ -565,6 +603,87 @@ public class UnicastServerRef extends UnicastRef
                 }
             }
             return map;
+        }
+    }
+
+    /**
+     * Unmarshal parameters for the given method of the given instance over
+     * the given marshalinputstream. Perform any necessary checks.
+     */
+    private Object[] unmarshalParameters(Object obj, Method method, MarshalInputStream in)
+    throws IOException, ClassNotFoundException {
+        return (obj instanceof DeserializationChecker) ?
+            unmarshalParametersChecked((DeserializationChecker)obj, method, in) :
+            unmarshalParametersUnchecked(method, in);
+    }
+
+    /**
+     * Unmarshal parameters for the given method of the given instance over
+     * the given marshalinputstream. Do not perform any additional checks.
+     */
+    private Object[] unmarshalParametersUnchecked(Method method, ObjectInput in)
+    throws IOException, ClassNotFoundException {
+        Class<?>[] types = method.getParameterTypes();
+        Object[] params = new Object[types.length];
+        for (int i = 0; i < types.length; i++) {
+            params[i] = unmarshalValue(types[i], in);
+        }
+        return params;
+    }
+
+    /**
+     * Unmarshal parameters for the given method of the given instance over
+     * the given marshalinputstream. Do perform all additional checks.
+     */
+    private Object[] unmarshalParametersChecked(
+        DeserializationChecker checker,
+        Method method, MarshalInputStream in)
+    throws IOException, ClassNotFoundException {
+        int callID = methodCallIDCount.getAndIncrement();
+        MyChecker myChecker = new MyChecker(checker, method, callID);
+        in.setStreamChecker(myChecker);
+        try {
+            Class<?>[] types = method.getParameterTypes();
+            Object[] values = new Object[types.length];
+            for (int i = 0; i < types.length; i++) {
+                myChecker.setIndex(i);
+                values[i] = unmarshalValue(types[i], in);
+            }
+            myChecker.end(callID);
+            return values;
+        } finally {
+            in.setStreamChecker(null);
+        }
+    }
+
+    private static class MyChecker implements MarshalInputStream.StreamChecker {
+        private final DeserializationChecker descriptorCheck;
+        private final Method method;
+        private final int callID;
+        private int parameterIndex;
+
+        MyChecker(DeserializationChecker descriptorCheck, Method method, int callID) {
+            this.descriptorCheck = descriptorCheck;
+            this.method = method;
+            this.callID = callID;
+        }
+
+        @Override
+        public void validateDescriptor(ObjectStreamClass descriptor) {
+            descriptorCheck.check(method, descriptor, parameterIndex, callID);
+        }
+
+        @Override
+        public void checkProxyInterfaceNames(String[] ifaces) {
+            descriptorCheck.checkProxyClass(method, ifaces, parameterIndex, callID);
+        }
+
+        void setIndex(int parameterIndex) {
+            this.parameterIndex = parameterIndex;
+        }
+
+        void end(int callId) {
+            descriptorCheck.end(callId);
         }
     }
 }

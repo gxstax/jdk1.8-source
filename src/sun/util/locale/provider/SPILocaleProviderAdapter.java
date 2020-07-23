@@ -64,8 +64,8 @@ public class SPILocaleProviderAdapter extends AuxLocaleProviderAdapter {
      * Returns the type of this LocaleProviderAdapter
      */
     @Override
-    public LocaleProviderAdapter.Type getAdapterType() {
-        return LocaleProviderAdapter.Type.SPI;
+    public Type getAdapterType() {
+        return Type.SPI;
     }
 
     @Override

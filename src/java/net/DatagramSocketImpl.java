@@ -25,9 +25,7 @@
 
 package java.net;
 
-import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InterruptedIOException;
 
 /**
  * Abstract datagram and multicast socket implementation base class.

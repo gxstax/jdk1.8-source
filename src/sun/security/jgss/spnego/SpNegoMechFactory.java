@@ -47,7 +47,7 @@ import java.util.Vector;
 public final class SpNegoMechFactory implements MechanismFactory {
 
     static final Provider PROVIDER =
-        new SunProvider();
+        new sun.security.jgss.SunProvider();
 
     static final Oid GSS_SPNEGO_MECH_OID =
         GSSUtil.createOid("1.3.6.1.5.5.2");

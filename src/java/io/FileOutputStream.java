@@ -67,6 +67,12 @@ class FileOutputStream extends OutputStream
      */
     private FileChannel channel;
 
+    /**
+     * The path of the referenced file
+     * (null if the stream is created with a file descriptor)
+     */
+    private final String path;
+
     private final Object closeLock = new Object();
     private volatile boolean closed = false;
 
@@ -202,6 +208,7 @@ class FileOutputStream extends OutputStream
         this.fd = new FileDescriptor();
         fd.attach(this);
         this.append = append;
+        this.path = name;
 
         open(name, append);
     }
@@ -239,6 +246,7 @@ class FileOutputStream extends OutputStream
         }
         this.fd = fdObj;
         this.append = false;
+        this.path = null;
 
         fd.attach(this);
     }
@@ -248,8 +256,19 @@ class FileOutputStream extends OutputStream
      * @param name name of file to be opened
      * @param append whether the file is to be opened in append mode
      */
-    private native void open(String name, boolean append)
+    private native void open0(String name, boolean append)
         throws FileNotFoundException;
+
+    // wrap native call to allow instrumentation
+    /**
+     * Opens a file, with the specified name, for overwriting or appending.
+     * @param name name of file to be opened
+     * @param append whether the file is to be opened in append mode
+     */
+    private void open(String name, boolean append)
+        throws FileNotFoundException {
+        open0(name, append);
+    }
 
     /**
      * Writes the specified byte to this file output stream.
@@ -376,7 +395,7 @@ class FileOutputStream extends OutputStream
     public FileChannel getChannel() {
         synchronized (this) {
             if (channel == null) {
-                channel = FileChannelImpl.open(fd, false, true, append, this);
+                channel = FileChannelImpl.open(fd, path, false, true, append, this);
             }
             return channel;
         }

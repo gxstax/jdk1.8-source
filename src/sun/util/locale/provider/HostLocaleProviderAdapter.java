@@ -41,8 +41,8 @@ public class HostLocaleProviderAdapter extends AuxLocaleProviderAdapter {
      * Returns the type of this LocaleProviderAdapter
      */
     @Override
-    public LocaleProviderAdapter.Type getAdapterType() {
-        return LocaleProviderAdapter.Type.HOST;
+    public Type getAdapterType() {
+        return Type.HOST;
     }
 
     @Override

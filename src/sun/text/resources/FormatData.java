@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -106,6 +106,7 @@ public class FormatData extends ParallelListResourceBundle {
             "T",
             "S",
             "H",
+            "R",
         };
 
         // Japanese imperial calendar era strings
@@ -115,6 +116,7 @@ public class FormatData extends ParallelListResourceBundle {
             "Taisho",
             "Showa",
             "Heisei",
+            "Reiwa",
         };
 
         return new Object[][] {
@@ -154,18 +156,18 @@ public class FormatData extends ParallelListResourceBundle {
             },
             { "MonthNarrows",
                 new String[] {
-                    "J",
-                    "F",
-                    "M",
-                    "A",
-                    "M",
-                    "J",
-                    "J",
-                    "A",
-                    "S",
-                    "O",
-                    "N",
-                    "D",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
                     "",
                 }
             },

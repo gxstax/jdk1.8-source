@@ -70,6 +70,10 @@ public class SunVolatileImage extends VolatileImage
     {
         this.comp = comp;
         this.graphicsConfig = graphicsConfig;
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Width (" + width + ")" +
+                              " and height (" + height + ") cannot be <= 0");
+        }
         this.width = width;
         this.height = height;
         this.forcedAccelSurfaceType = accType;
@@ -261,7 +265,7 @@ public class SunVolatileImage extends VolatileImage
     /**
      * {@inheritDoc}
      *
-     * @see DestSurfaceProvider#getDestSurface
+     * @see sun.java2d.DestSurfaceProvider#getDestSurface
      */
     @Override
     public Surface getDestSurface() {

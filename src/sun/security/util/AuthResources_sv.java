@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -88,7 +88,7 @@ public class AuthResources_sv extends java.util.ListResourceBundle {
         {"Keystore.alias.","Nyckellageralias: "},
         {"Keystore.password.","Nyckellagerl\u00F6senord: "},
         {"Private.key.password.optional.",
-            "L\u00F6senord f\u00F6r personlig nyckel (valfritt): "},
+            "L\u00F6senord f\u00F6r privat nyckel (valfritt): "},
 
         // com.sun.security.auth.module.Krb5LoginModule
         {"Kerberos.username.defUsername.",
@@ -117,7 +117,7 @@ public class AuthResources_sv extends java.util.ListResourceBundle {
         {"only.Principal.based.grant.entries.permitted",
                 "endast identitetshavarbaserade poster till\u00E5ts"},
         {"expected.permission.entry", "f\u00F6rv\u00E4ntade beh\u00F6righetspost"},
-        {"number.", "antal "},
+        {"number.", "nummer"},
         {"expected.expect.read.end.of.file.",
                 "f\u00F6rv\u00E4ntade {0}, l\u00E4ste filslut"},
         {"expected.read.end.of.file", "f\u00F6rv\u00E4ntade ';', l\u00E4ste filslut"},
@@ -137,7 +137,7 @@ public class AuthResources_sv extends java.util.ListResourceBundle {
         // provided.null.name is the NullPointerException message when a
         // developer incorrectly passes a null name to the constructor of
         // subclasses of java.security.Principal
-        {"provided.null.name", "angav null-namn"}
+        {"provided.null.name", "null-namn angavs"}
 
     };
 

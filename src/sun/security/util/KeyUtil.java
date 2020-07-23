@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 
 package sun.security.util;
 
+import java.security.AlgorithmParameters;
 import java.security.Key;
 import java.security.PrivilegedAction;
 import java.security.AccessController;
@@ -32,13 +33,19 @@ import java.security.InvalidKeyException;
 import java.security.interfaces.ECKey;
 import java.security.interfaces.RSAKey;
 import java.security.interfaces.DSAKey;
+import java.security.interfaces.DSAParams;
+import java.security.SecureRandom;
 import java.security.spec.KeySpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.InvalidParameterSpecException;
 import javax.crypto.SecretKey;
 import javax.crypto.interfaces.DHKey;
 import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.DHPublicKeySpec;
 import java.math.BigInteger;
+
+import sun.security.jca.JCAUtil;
 
 /**
  * A utility class to get key length, valiate keys, etc.
@@ -84,7 +91,8 @@ public final class KeyUtil {
             size = pubk.getParams().getOrder().bitLength();
         } else if (key instanceof DSAKey) {
             DSAKey pubk = (DSAKey)key;
-            size = pubk.getParams().getP().bitLength();
+            DSAParams params = pubk.getParams();    // params can be null
+            size = (params != null) ? params.getP().bitLength() : -1;
         } else if (key instanceof DHKey) {
             DHKey pubk = (DHKey)key;
             size = pubk.getParams().getP().bitLength();
@@ -92,6 +100,61 @@ public final class KeyUtil {
             // a key we are not able to handle.
 
         return size;
+    }
+
+    /**
+     * Returns the key size of the given cryptographic parameters in bits.
+     *
+     * @param parameters the cryptographic parameters, cannot be null
+     * @return the key size of the given cryptographic parameters in bits,
+     *       or -1 if the key size is not accessible
+     */
+    public static final int getKeySize(AlgorithmParameters parameters) {
+
+        String algorithm = parameters.getAlgorithm();
+        switch (algorithm) {
+            case "EC":
+                try {
+                    ECKeySizeParameterSpec ps = parameters.getParameterSpec(
+                            ECKeySizeParameterSpec.class);
+                    if (ps != null) {
+                        return ps.getKeySize();
+                    }
+                } catch (InvalidParameterSpecException ipse) {
+                    // ignore
+                }
+
+                try {
+                    ECParameterSpec ps = parameters.getParameterSpec(
+                            ECParameterSpec.class);
+                    if (ps != null) {
+                        return ps.getOrder().bitLength();
+                    }
+                } catch (InvalidParameterSpecException ipse) {
+                    // ignore
+                }
+
+                // Note: the ECGenParameterSpec case should be covered by the
+                // ECParameterSpec case above.
+                // See ECUtil.getECParameterSpec(Provider, String).
+
+                break;
+            case "DiffieHellman":
+                try {
+                    DHParameterSpec ps = parameters.getParameterSpec(
+                            DHParameterSpec.class);
+                    if (ps != null) {
+                        return ps.getP().bitLength();
+                    }
+                } catch (InvalidParameterSpecException ipse) {
+                    // ignore
+                }
+                break;
+
+            // May support more AlgorithmParameters algorithms in the future.
+        }
+
+        return -1;
     }
 
     /**
@@ -143,8 +206,6 @@ public final class KeyUtil {
 
     /**
      * Returns whether the specified provider is Oracle provider or not.
-     * <P>
-     * Note that this method is only apply to SunJCE and SunPKCS11 at present.
      *
      * @param  providerName
      *         the provider name
@@ -152,8 +213,84 @@ public final class KeyUtil {
      *         {@code providerName} is Oracle provider
      */
     public static final boolean isOracleJCEProvider(String providerName) {
-        return providerName != null && (providerName.equals("SunJCE") ||
-                                        providerName.startsWith("SunPKCS11"));
+        return providerName != null &&
+                (providerName.equals("SunJCE") ||
+                    providerName.equals("SunMSCAPI") ||
+                    providerName.equals("OracleUcrypto") ||
+                    providerName.startsWith("SunPKCS11"));
+    }
+
+    /**
+     * Check the format of TLS PreMasterSecret.
+     * <P>
+     * To avoid vulnerabilities described by section 7.4.7.1, RFC 5246,
+     * treating incorrectly formatted message blocks and/or mismatched
+     * version numbers in a manner indistinguishable from correctly
+     * formatted RSA blocks.
+     *
+     * RFC 5246 describes the approach as :
+     *
+     *  1. Generate a string R of 48 random bytes
+     *
+     *  2. Decrypt the message to recover the plaintext M
+     *
+     *  3. If the PKCS#1 padding is not correct, or the length of message
+     *     M is not exactly 48 bytes:
+     *        pre_master_secret = R
+     *     else If ClientHello.client_version <= TLS 1.0, and version
+     *     number check is explicitly disabled:
+     *        premaster secret = M
+     *     else If M[0..1] != ClientHello.client_version:
+     *        premaster secret = R
+     *     else:
+     *        premaster secret = M
+     *
+     * Note that #2 should have completed before the call to this method.
+     *
+     * @param  clientVersion the version of the TLS protocol by which the
+     *         client wishes to communicate during this session
+     * @param  serverVersion the negotiated version of the TLS protocol which
+     *         contains the lower of that suggested by the client in the client
+     *         hello and the highest supported by the server.
+     * @param  encoded the encoded key in its "RAW" encoding format
+     * @param  isFailover whether or not the previous decryption of the
+     *         encrypted PreMasterSecret message run into problem
+     * @return the polished PreMasterSecret key in its "RAW" encoding format
+     */
+    public static byte[] checkTlsPreMasterSecretKey(
+            int clientVersion, int serverVersion, SecureRandom random,
+            byte[] encoded, boolean isFailOver) {
+
+        if (random == null) {
+            random = JCAUtil.getSecureRandom();
+        }
+        byte[] replacer = new byte[48];
+        random.nextBytes(replacer);
+
+        if (!isFailOver && (encoded != null)) {
+            // check the length
+            if (encoded.length != 48) {
+                // private, don't need to clone the byte array.
+                return replacer;
+            }
+
+            int encodedVersion =
+                    ((encoded[0] & 0xFF) << 8) | (encoded[1] & 0xFF);
+            if (clientVersion != encodedVersion) {
+                if (clientVersion > 0x0301 ||               // 0x0301: TLSv1
+                       serverVersion != encodedVersion) {
+                    encoded = replacer;
+                }   // Otherwise, For compatibility, we maintain the behavior
+                    // that the version in pre_master_secret can be the
+                    // negotiated version for TLS v1.0 and SSL v3.0.
+            }
+
+            // private, don't need to clone the byte array.
+            return encoded;
+        }
+
+        // private, don't need to clone the byte array.
+        return replacer;
     }
 
     /**
@@ -198,7 +335,16 @@ public final class KeyUtil {
                     "Diffie-Hellman public key is too large");
         }
 
-        // Don't bother to check against the y^q mod p if safe primes are used.
+        // y^q mod p == 1?
+        // Unable to perform this check as q is unknown in this circumstance.
+
+        // p is expected to be prime.  However, it is too expensive to check
+        // that p is prime.  Instead, in order to mitigate the impact of
+        // non-prime values, we check that y is not a factor of p.
+        BigInteger r = p.remainder(y);
+        if (r.equals(BigInteger.ZERO)) {
+            throw new InvalidKeyException("Invalid Diffie-Hellman parameters");
+        }
     }
 
     /**

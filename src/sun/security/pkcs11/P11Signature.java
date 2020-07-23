@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -257,47 +257,51 @@ final class P11Signature extends SignatureSpi {
             session = token.killSession(session);
             return;
         }
-        // "cancel" operation by finishing it
-        // XXX make sure all this always works correctly
-        if (mode == M_SIGN) {
-            try {
-                if (type == T_UPDATE) {
-                    token.p11.C_SignFinal(session.id(), 0);
-                } else {
-                    byte[] digest;
-                    if (type == T_DIGEST) {
-                        digest = md.digest();
-                    } else { // T_RAW
-                        digest = buffer;
+        try {
+            // "cancel" operation by finishing it
+            // XXX make sure all this always works correctly
+            if (mode == M_SIGN) {
+                try {
+                    if (type == T_UPDATE) {
+                        token.p11.C_SignFinal(session.id(), 0);
+                    } else {
+                        byte[] digest;
+                        if (type == T_DIGEST) {
+                            digest = md.digest();
+                        } else { // T_RAW
+                            digest = buffer;
+                        }
+                        token.p11.C_Sign(session.id(), digest);
                     }
-                    token.p11.C_Sign(session.id(), digest);
+                } catch (PKCS11Exception e) {
+                    throw new ProviderException("cancel failed", e);
                 }
-            } catch (PKCS11Exception e) {
-                throw new ProviderException("cancel failed", e);
-            }
-        } else { // M_VERIFY
-            try {
-                byte[] signature;
-                if (keyAlgorithm.equals("DSA")) {
-                    signature = new byte[40];
-                } else {
-                    signature = new byte[(p11Key.length() + 7) >> 3];
-                }
-                if (type == T_UPDATE) {
-                    token.p11.C_VerifyFinal(session.id(), signature);
-                } else {
-                    byte[] digest;
-                    if (type == T_DIGEST) {
-                        digest = md.digest();
-                    } else { // T_RAW
-                        digest = buffer;
+            } else { // M_VERIFY
+                try {
+                    byte[] signature;
+                    if (keyAlgorithm.equals("DSA")) {
+                        signature = new byte[40];
+                    } else {
+                        signature = new byte[(p11Key.length() + 7) >> 3];
                     }
-                    token.p11.C_Verify(session.id(), digest, signature);
+                    if (type == T_UPDATE) {
+                        token.p11.C_VerifyFinal(session.id(), signature);
+                    } else {
+                        byte[] digest;
+                        if (type == T_DIGEST) {
+                            digest = md.digest();
+                        } else { // T_RAW
+                            digest = buffer;
+                        }
+                        token.p11.C_Verify(session.id(), digest, signature);
+                    }
+                } catch (PKCS11Exception e) {
+                    // will fail since the signature is incorrect
+                    // XXX check error code
                 }
-            } catch (PKCS11Exception e) {
-                // will fail since the signature is incorrect
-                // XXX check error code
             }
+        } finally {
+            session = token.releaseSession(session);
         }
     }
 
@@ -316,6 +320,8 @@ final class P11Signature extends SignatureSpi {
             }
             initialized = true;
         } catch (PKCS11Exception e) {
+            // release session when initialization failed
+            session = token.releaseSession(session);
             throw new ProviderException("Initialization failed", e);
         }
         if (bytesProcessed != 0) {
@@ -340,7 +346,10 @@ final class P11Signature extends SignatureSpi {
         }
         int minKeySize = (int) mechInfo.ulMinKeySize;
         int maxKeySize = (int) mechInfo.ulMaxKeySize;
-
+        // need to override the MAX keysize for SHA1withDSA
+        if (md != null && mechanism == CKM_DSA && maxKeySize > 1024) {
+               maxKeySize = 1024;
+        }
         int keySize = 0;
         if (key instanceof P11Key) {
             keySize = ((P11Key) key).length();
@@ -463,6 +472,10 @@ final class P11Signature extends SignatureSpi {
         if (len == 0) {
             return;
         }
+        // check for overflow
+        if (len + bytesProcessed < 0) {
+            throw new ProviderException("Processed bytes limits exceeded.");
+        }
         switch (type) {
         case T_UPDATE:
             try {
@@ -473,6 +486,8 @@ final class P11Signature extends SignatureSpi {
                 }
                 bytesProcessed += len;
             } catch (PKCS11Exception e) {
+                initialized = false;
+                session = token.releaseSession(session);
                 throw new ProviderException(e);
             }
             break;
@@ -520,6 +535,8 @@ final class P11Signature extends SignatureSpi {
                 bytesProcessed += len;
                 byteBuffer.position(ofs + len);
             } catch (PKCS11Exception e) {
+                initialized = false;
+                session = token.releaseSession(session);
                 throw new ProviderException("Update failed", e);
             }
             break;
@@ -702,12 +719,21 @@ final class P11Signature extends SignatureSpi {
         }
     }
 
-    private static byte[] asn1ToDSA(byte[] signature) throws SignatureException {
+    private static byte[] asn1ToDSA(byte[] sig) throws SignatureException {
         try {
-            DerInputStream in = new DerInputStream(signature);
+            // Enforce strict DER checking for signatures
+            DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
             DerValue[] values = in.getSequence(2);
+
+            // check number of components in the read sequence
+            // and trailing data
+            if ((values.length != 2) || (in.available() != 0)) {
+                throw new IOException("Invalid encoding for signature");
+            }
+
             BigInteger r = values[0].getPositiveBigInteger();
             BigInteger s = values[1].getPositiveBigInteger();
+
             byte[] br = toByteArray(r, 20);
             byte[] bs = toByteArray(s, 20);
             if ((br == null) || (bs == null)) {
@@ -717,16 +743,25 @@ final class P11Signature extends SignatureSpi {
         } catch (SignatureException e) {
             throw e;
         } catch (Exception e) {
-            throw new SignatureException("invalid encoding for signature", e);
+            throw new SignatureException("Invalid encoding for signature", e);
         }
     }
 
-    private byte[] asn1ToECDSA(byte[] signature) throws SignatureException {
+    private byte[] asn1ToECDSA(byte[] sig) throws SignatureException {
         try {
-            DerInputStream in = new DerInputStream(signature);
+            // Enforce strict DER checking for signatures
+            DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
             DerValue[] values = in.getSequence(2);
+
+            // check number of components in the read sequence
+            // and trailing data
+            if ((values.length != 2) || (in.available() != 0)) {
+                throw new IOException("Invalid encoding for signature");
+            }
+
             BigInteger r = values[0].getPositiveBigInteger();
             BigInteger s = values[1].getPositiveBigInteger();
+
             // trim leading zeroes
             byte[] br = KeyUtil.trimZeroes(r.toByteArray());
             byte[] bs = KeyUtil.trimZeroes(s.toByteArray());
@@ -737,7 +772,7 @@ final class P11Signature extends SignatureSpi {
             System.arraycopy(bs, 0, res, res.length - bs.length, bs.length);
             return res;
         } catch (Exception e) {
-            throw new SignatureException("invalid encoding for signature", e);
+            throw new SignatureException("Invalid encoding for signature", e);
         }
     }
 

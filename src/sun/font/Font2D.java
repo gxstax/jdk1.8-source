@@ -157,6 +157,21 @@ public abstract class Font2D {
         }
     }
 
+    public static final int FWIDTH_NORMAL = 5;    // OS/2 usWidthClass
+    public static final int FWEIGHT_NORMAL = 400; // OS/2 usWeightClass
+    public static final int FWEIGHT_BOLD   = 700; // OS/2 usWeightClass
+
+    public int getWidth() {
+        return FWIDTH_NORMAL;
+    }
+
+    public int getWeight() {
+        if ((style & Font.BOLD) !=0) {
+            return FWEIGHT_BOLD;
+        } else {
+            return FWEIGHT_NORMAL;
+        }
+    }
 
     int getRank() {
         return fontRank;
@@ -446,8 +461,15 @@ public abstract class Font2D {
      * to check the font class before attempting to run, rather than needing
      * to promote this method up from TrueTypeFont
      */
-    byte[] getTableBytes(int tag) {
+    protected byte[] getTableBytes(int tag) {
         return null;
+    }
+
+    /* implemented for fonts backed by an sfnt that has
+     * OpenType or AAT layout tables.
+     */
+    protected long getLayoutTableCache() {
+        return 0L;
     }
 
     /* for layout code */

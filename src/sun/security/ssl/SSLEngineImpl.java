@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -519,7 +519,6 @@ final public class SSLEngineImpl extends SSLEngine {
                     return HandshakeStatus.NEED_UNWRAP;
                 } // else not handshaking
             }
-
             return HandshakeStatus.NOT_HANDSHAKING;
         }
     }
@@ -581,14 +580,6 @@ final public class SSLEngineImpl extends SSLEngine {
      * Synchronized on "this" from readRecord.
      */
     private void changeReadCiphers() throws SSLException {
-        if (connectionState != cs_HANDSHAKE
-                && connectionState != cs_RENEGOTIATE) {
-            throw new SSLProtocolException(
-                "State error, change cipher specs");
-        }
-
-        // ... create decompressor
-
         CipherBox oldCipher = readCipher;
 
         try {
@@ -774,6 +765,10 @@ final public class SSLEngineImpl extends SSLEngine {
             synchronized (unwrapLock) {
                 return readNetRecord(ea);
             }
+        } catch (SSLProtocolException spe) {
+            // may be an unexpected handshake message
+            fatal(Alerts.alert_unexpected_message, spe.getMessage(), spe);
+            return null;  // make compiler happy
         } catch (Exception e) {
             /*
              * Don't reset position so it looks like we didn't
@@ -998,6 +993,7 @@ final public class SSLEngineImpl extends SSLEngine {
                      * session (new keys exchanged) with just this connection
                      * in it.
                      */
+
                     initHandshaker();
                     if (!handshaker.activated()) {
                         // prior to handshaking, activate the handshake
@@ -1039,7 +1035,6 @@ final public class SSLEngineImpl extends SSLEngine {
                         }
                         handshaker = null;
                         connectionState = cs_DATA;
-
                         // No handshakeListeners here.  That's a
                         // SSLSocket thing.
                     } else if (handshaker.taskOutstanding()) {
@@ -1077,12 +1072,16 @@ final public class SSLEngineImpl extends SSLEngine {
 
                 case Record.ct_change_cipher_spec:
                     if ((connectionState != cs_HANDSHAKE
-                                && connectionState != cs_RENEGOTIATE)
-                            || inputRecord.available() != 1
-                            || inputRecord.read() != 1) {
+                                && connectionState != cs_RENEGOTIATE)) {
+                        // For the CCS message arriving in the wrong state
                         fatal(Alerts.alert_unexpected_message,
-                            "illegal change cipher spec msg, state = "
-                            + connectionState);
+                                "illegal change cipher spec msg, conn state = "
+                                + connectionState);
+                    } else if (inputRecord.available() != 1
+                            || inputRecord.read() != 1) {
+                        // For structural/content issues with the CCS
+                        fatal(Alerts.alert_unexpected_message,
+                                "Malformed change cipher spec msg");
                     }
 
                     //
@@ -1092,6 +1091,7 @@ final public class SSLEngineImpl extends SSLEngine {
                     // to be checked by a minor tweak to the state
                     // machine.
                     //
+                    handshaker.receiveChangeCipherSpec();
                     changeReadCiphers();
                     // next message MUST be a finished message
                     expectingFinished = true;
@@ -1131,7 +1131,6 @@ final public class SSLEngineImpl extends SSLEngine {
                 }
             } // synchronized (this)
         }
-
         return hsStatus;
     }
 
@@ -1165,6 +1164,10 @@ final public class SSLEngineImpl extends SSLEngine {
             synchronized (wrapLock) {
                 return writeAppRecord(ea);
             }
+        } catch (SSLProtocolException spe) {
+            // may be an unexpected handshake message
+            fatal(Alerts.alert_unexpected_message, spe.getMessage(), spe);
+            return null;  // make compiler happy
         } catch (Exception e) {
             ea.resetPos();
 
@@ -1192,7 +1195,6 @@ final public class SSLEngineImpl extends SSLEngine {
          * See if the handshaker needs to report back some SSLException.
          */
         checkTaskThrown();
-
         /*
          * short circuit if we're closed/closing.
          */
@@ -1214,7 +1216,6 @@ final public class SSLEngineImpl extends SSLEngine {
                  * without trying to wrap anything.
                  */
                 hsStatus = getHSStatus(null);
-
                 if (hsStatus == HandshakeStatus.NEED_UNWRAP) {
                     return new SSLEngineResult(Status.OK, hsStatus, 0, 0);
                 }
@@ -1926,13 +1927,21 @@ final public class SSLEngineImpl extends SSLEngine {
 
         case cs_START:
             /*
-             * If we need to change the engine mode and the enabled
-             * protocols haven't specifically been set by the user,
-             * change them to the corresponding default ones.
+             * If we need to change the socket mode and the enabled
+             * protocols and cipher suites haven't specifically been
+             * set by the user, change them to the corresponding
+             * default ones.
              */
-            if (roleIsServer != (!flag) &&
-                    sslContext.isDefaultProtocolList(enabledProtocols)) {
-                enabledProtocols = sslContext.getDefaultProtocolList(!flag);
+            if (roleIsServer != (!flag)) {
+                if (sslContext.isDefaultProtocolList(enabledProtocols)) {
+                    enabledProtocols =
+                            sslContext.getDefaultProtocolList(!flag);
+                }
+
+                if (sslContext.isDefaultCipherSuiteList(enabledCipherSuites)) {
+                    enabledCipherSuites =
+                            sslContext.getDefaultCipherSuiteList(!flag);
+                }
             }
 
             roleIsServer = !flag;

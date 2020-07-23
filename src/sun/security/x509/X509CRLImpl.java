@@ -536,10 +536,15 @@ public class X509CRLImpl extends X509CRL implements DerEncoder {
      * @return value of this CRL in a printable form.
      */
     public String toString() {
+        return toStringWithAlgName("" + sigAlgId);
+    }
+
+    // Specifically created for keytool to append a (weak) label to sigAlg
+    public String toStringWithAlgName(String name) {
         StringBuffer sb = new StringBuffer();
         sb.append("X.509 CRL v" + (version+1) + "\n");
         if (sigAlgId != null)
-            sb.append("Signature Algorithm: " + sigAlgId.toString() +
+            sb.append("Signature Algorithm: " + name.toString() +
                   ", OID=" + (sigAlgId.getOID()).toString() + "\n");
         if (issuer != null)
             sb.append("Issuer: " + issuer.toString() + "\n");
@@ -742,9 +747,7 @@ public class X509CRLImpl extends X509CRL implements DerEncoder {
     public byte[] getTBSCertList() throws CRLException {
         if (tbsCertList == null)
             throw new CRLException("Uninitialized CRL");
-        byte[] dup = new byte[tbsCertList.length];
-        System.arraycopy(tbsCertList, 0, dup, 0, dup.length);
-        return dup;
+        return tbsCertList.clone();
     }
 
     /**
@@ -755,9 +758,7 @@ public class X509CRLImpl extends X509CRL implements DerEncoder {
     public byte[] getSignature() {
         if (signature == null)
             return null;
-        byte[] dup = new byte[signature.length];
-        System.arraycopy(signature, 0, dup, 0, dup.length);
-        return dup;
+        return signature.clone();
     }
 
     /**

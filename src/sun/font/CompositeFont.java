@@ -71,6 +71,13 @@ public final class CompositeFont extends Font2D {
         } else {
             numSlots = componentNames.length;
         }
+        /* We will limit the number of slots to 254.
+         * We store the slot for a glyph id in a byte and we may use one slot
+         * for an EUDC font, and we may also create a composite
+         * using this composite as a backup for a physical font.
+         * So we want to leave space for the two additional slots.
+         */
+         numSlots = (numSlots <= 254) ? numSlots : 254;
 
         /* Only the first "numMetricsSlots" slots are used for font metrics.
          * the rest are considered "fallback" slots".
@@ -86,20 +93,25 @@ public final class CompositeFont extends Font2D {
          * better that it is handled internally to the CompositeFont class.
          */
         if (fm.getEUDCFont() != null) {
+            int msCnt = numMetricsSlots;
+            int fbCnt = numSlots - msCnt;
             numSlots++;
             if (componentNames != null) {
                 componentNames = new String[numSlots];
-                System.arraycopy(compNames, 0, componentNames, 0, numSlots-1);
-                componentNames[numSlots-1] =
-                    fm.getEUDCFont().getFontName(null);
+                System.arraycopy(compNames, 0, componentNames, 0, msCnt);
+                componentNames[msCnt] = fm.getEUDCFont().getFontName(null);
+                System.arraycopy(compNames, msCnt,
+                                 componentNames, msCnt+1, fbCnt);
             }
             if (componentFileNames != null) {
                 componentFileNames = new String[numSlots];
                 System.arraycopy(compFileNames, 0,
-                                  componentFileNames, 0, numSlots-1);
+                                  componentFileNames, 0, msCnt);
+                System.arraycopy(compFileNames, msCnt,
+                                  componentFileNames, msCnt+1, fbCnt);
             }
             components = new PhysicalFont[numSlots];
-            components[numSlots-1] = fm.getEUDCFont();
+            components[msCnt] = fm.getEUDCFont();
             deferredInitialisation = new boolean[numSlots];
             if (defer) {
                 for (int i=0; i<numSlots-1; i++) {
@@ -140,6 +152,25 @@ public final class CompositeFont extends Font2D {
         } else {
             familyName = fullName;
         }
+    }
+
+    /*
+     * Build a composite from a set of individual slot fonts.
+     */
+    CompositeFont(PhysicalFont[] slotFonts) {
+
+        isStdComposite = false;
+        handle = new Font2DHandle(this);
+        fullName = slotFonts[0].fullName;
+        familyName = slotFonts[0].familyName;
+        style = slotFonts[0].style;
+
+        numMetricsSlots = 1; /* Only the physical Font */
+        numSlots = slotFonts.length;
+
+        components = new PhysicalFont[numSlots];
+        System.arraycopy(slotFonts, 0, components, 0, numSlots);
+        deferredInitialisation = new boolean[numSlots]; // all false.
     }
 
     /* This method is currently intended to be called only from
@@ -263,10 +294,21 @@ public final class CompositeFont extends Font2D {
                 if (componentNames[slot] == null) {
                     componentNames[slot] = name;
                 } else if (!componentNames[slot].equalsIgnoreCase(name)) {
-                    components[slot] =
-                        (PhysicalFont) fm.findFont2D(componentNames[slot],
-                                                     style,
+                    /* If a component specifies the file with a bad font,
+                     * the corresponding slot will be initialized by
+                     * default physical font. In such case findFont2D may
+                     * return composite font which cannot be casted to
+                     * physical font.
+                     */
+                    try {
+                        components[slot] =
+                            (PhysicalFont) fm.findFont2D(componentNames[slot],
+                                                         style,
                                                 FontManager.PHYSICAL_FALLBACK);
+                    } catch (ClassCastException cce) {
+                        /* Assign default physical font to the slot */
+                        components[slot] = fm.getDefaultPhysicalFont();
+                    }
                 }
             }
             deferredInitialisation[slot] = false;

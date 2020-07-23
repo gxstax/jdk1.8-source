@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -127,7 +127,7 @@ final class P11KeyStore extends KeyStoreSpi {
     private final boolean useSecmodTrust;
 
     // if useSecmodTrust == true, which type of trust we are interested in
-    private Secmod.TrustType nssTrustType;
+    private TrustType nssTrustType;
 
     /**
      * The underlying token may contain multiple certs belonging to the
@@ -743,7 +743,7 @@ final class P11KeyStore extends KeyStoreSpi {
         }
 
         if (useSecmodTrust) {
-            nssTrustType = Secmod.TrustType.ALL;
+            nssTrustType = TrustType.ALL;
         }
 
         try {
@@ -752,6 +752,21 @@ final class P11KeyStore extends KeyStoreSpi {
             } else {
                 login(new PasswordCallbackHandler(password));
             }
+        } catch(LoginException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof PKCS11Exception) {
+                PKCS11Exception pe = (PKCS11Exception) cause;
+                if (pe.getErrorCode() == CKR_PIN_INCORRECT) {
+                    // if password is wrong, the cause of the IOException
+                    // should be an UnrecoverableKeyException
+                    throw new IOException("load failed",
+                            new UnrecoverableKeyException().initCause(e));
+                }
+            }
+            throw new IOException("load failed", e);
+        }
+
+        try {
             if (mapLabels() == true) {
                 // CKA_LABELs are shared by multiple certs
                 writeDisabled = true;
@@ -759,7 +774,7 @@ final class P11KeyStore extends KeyStoreSpi {
             if (debug != null) {
                 dumpTokenMap();
             }
-        } catch (LoginException | KeyStoreException | PKCS11Exception e) {
+        } catch (KeyStoreException | PKCS11Exception e) {
             throw new IOException("load failed", e);
         }
     }
@@ -806,10 +821,10 @@ final class P11KeyStore extends KeyStoreSpi {
                         ("invalid null LoadStoreParameter");
         }
         if (useSecmodTrust) {
-            if (param instanceof Secmod.KeyStoreLoadParameter) {
-                nssTrustType = ((Secmod.KeyStoreLoadParameter)param).getTrustType();
+            if (param instanceof KeyStoreLoadParameter) {
+                nssTrustType = ((KeyStoreLoadParameter)param).getTrustType();
             } else {
-                nssTrustType = Secmod.TrustType.ALL;
+                nssTrustType = TrustType.ALL;
             }
         }
 

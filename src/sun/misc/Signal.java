@@ -68,7 +68,7 @@ import java.util.Hashtable;
  *
  * @author   Sheng Liang
  * @author   Bill Shannon
- * @see      SignalHandler
+ * @see      sun.misc.SignalHandler
  * @since    1.2
  */
 public final class Signal {
@@ -152,9 +152,9 @@ public final class Signal {
      * @result the old handler
      * @exception IllegalArgumentException the signal is in use by the VM
      * @see Signal#raise(Signal sig)
-     * @see SignalHandler
-     * @see SignalHandler#SIG_DFL
-     * @see SignalHandler#SIG_IGN
+     * @see sun.misc.SignalHandler
+     * @see sun.misc.SignalHandler#SIG_DFL
+     * @see sun.misc.SignalHandler#SIG_IGN
      */
     public static synchronized SignalHandler handle(Signal sig,
                                                     SignalHandler handler)

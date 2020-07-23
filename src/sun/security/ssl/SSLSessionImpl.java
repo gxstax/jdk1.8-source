@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -91,6 +91,7 @@ final class SSLSessionImpl extends ExtendedSSLSession {
     private byte                compressionMethod;
     private CipherSuite         cipherSuite;
     private SecretKey           masterSecret;
+    private final boolean       useExtendedMasterSecret;
 
     /*
      * Information not part of the SSLv3 protocol spec, but used
@@ -113,6 +114,18 @@ final class SSLSessionImpl extends ExtendedSSLSession {
     // Principals for non-certificate based cipher suites
     private Principal peerPrincipal;
     private Principal localPrincipal;
+
+    // The endpoint identification algorithm used to check certificates
+    // in this session.
+    private final String              endpointIdentificationAlgorithm;
+
+    /*
+     * Is the session currently re-established with a session-resumption
+     * abbreviated initial handshake?
+     *
+     * Note that currently we only set this variable in client side.
+     */
+    private boolean isSessionResumption = false;
 
     /*
      * We count session creations, eventually for statistical data but
@@ -137,7 +150,7 @@ final class SSLSessionImpl extends ExtendedSSLSession {
      */
     private SSLSessionImpl() {
         this(ProtocolVersion.NONE, CipherSuite.C_NULL, null,
-            new SessionId(false, null), null, -1);
+            new SessionId(false, null), null, -1, false, null);
     }
 
     /*
@@ -147,9 +160,11 @@ final class SSLSessionImpl extends ExtendedSSLSession {
      */
     SSLSessionImpl(ProtocolVersion protocolVersion, CipherSuite cipherSuite,
             Collection<SignatureAndHashAlgorithm> algorithms,
-            SecureRandom generator, String host, int port) {
+            SecureRandom generator, String host, int port,
+            boolean useExtendedMasterSecret, String endpointIdAlgorithm) {
         this(protocolVersion, cipherSuite, algorithms,
-             new SessionId(defaultRejoinable, generator), host, port);
+             new SessionId(defaultRejoinable, generator), host, port,
+             useExtendedMasterSecret, endpointIdAlgorithm);
     }
 
     /*
@@ -157,7 +172,9 @@ final class SSLSessionImpl extends ExtendedSSLSession {
      */
     SSLSessionImpl(ProtocolVersion protocolVersion, CipherSuite cipherSuite,
             Collection<SignatureAndHashAlgorithm> algorithms,
-            SessionId id, String host, int port) {
+            SessionId id, String host, int port,
+            boolean useExtendedMasterSecret,
+            String endpointIdAlgorithm){
         this.protocolVersion = protocolVersion;
         sessionId = id;
         peerCerts = null;
@@ -169,6 +186,8 @@ final class SSLSessionImpl extends ExtendedSSLSession {
         sessionCount = ++counter;
         localSupportedSignAlgs =
             SignatureAndHashAlgorithm.getAlgorithmNames(algorithms);
+        this.useExtendedMasterSecret = useExtendedMasterSecret;
+        this.endpointIdentificationAlgorithm = endpointIdAlgorithm;
 
         if (debug != null && Debug.isOn("session")) {
             System.out.println("%% Initialized:  " + this);
@@ -188,6 +207,10 @@ final class SSLSessionImpl extends ExtendedSSLSession {
      */
     SecretKey getMasterSecret() {
         return masterSecret;
+    }
+
+    boolean getUseExtendedMasterSecret() {
+        return useExtendedMasterSecret;
     }
 
     void setPeerCertificates(X509Certificate[] peer) {
@@ -228,6 +251,10 @@ final class SSLSessionImpl extends ExtendedSSLSession {
      */
     void setLocalPrincipal(Principal principal) {
         localPrincipal = principal;
+    }
+
+    String getEndpointIdentificationAlgorithm() {
+        return this.endpointIdentificationAlgorithm;
     }
 
     /**
@@ -322,6 +349,22 @@ final class SSLSessionImpl extends ExtendedSSLSession {
        if (debug != null && Debug.isOn("session")) {
            System.out.println("%% Negotiating:  " + this);
        }
+    }
+
+    /**
+     * Return true if the session is currently re-established with a
+     * session-resumption abbreviated initial handshake.
+     */
+    boolean isSessionResumption() {
+        return isSessionResumption;
+    }
+
+    /**
+     * Resets whether the session is re-established with a session-resumption
+     * abbreviated initial handshake.
+     */
+    void setAsSessionResumption(boolean flag) {
+        isSessionResumption = flag;
     }
 
     /**

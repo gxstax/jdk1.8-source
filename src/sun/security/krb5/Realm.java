@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,6 +47,12 @@ import sun.security.krb5.internal.util.KerberosString;
  * This class is immutable.
  */
 public class Realm implements Cloneable {
+
+    public static final boolean AUTODEDUCEREALM =
+        java.security.AccessController.doPrivileged(
+                new sun.security.action.GetBooleanAction(
+                        "sun.security.krb5.autodeducerealm"));
+
     private final String realm; // not null nor empty
 
     public Realm(String name) throws RealmException {
@@ -244,7 +250,7 @@ public class Realm implements Cloneable {
      *
      * @param cRealm the initiating realm, not null
      * @param sRealm the target realm, not null, not equals to cRealm
-     * @returns array of realms including at least cRealm as the first
+     * @return array of realms including at least cRealm as the first
      *          element
      */
     public static String[] getRealmsList(String cRealm, String sRealm) {
@@ -348,7 +354,7 @@ public class Realm implements Cloneable {
      * for a service in the target realm sRealm.
      * @param cRealm the initiating realm
      * @param sRealm the target realm, not the same as cRealm
-     * @returns array of realms including cRealm as the first element
+     * @return array of realms including cRealm as the first element
      */
     private static String[] parseHierarchy(String cRealm, String sRealm) {
 
