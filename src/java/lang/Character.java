@@ -555,6 +555,8 @@ class Character implements java.io.Serializable, Comparable<Character> {
      * Unicode supplementary code point</a>, constant {@code U+10000}.
      *
      * @since 1.5
+     * 使用代理区最小值，超过这个值，就需要使用
+     * 大于0x00FFFF的码位都需要使用代理区的码点。
      */
     public static final int MIN_SUPPLEMENTARY_CODE_POINT = 0x010000;
 

@@ -860,6 +860,7 @@ public final class Locale implements Cloneable, Serializable {
 
     private static Locale initDefault() {
         String language, region, script, country, variant;
+        // 读取系统配置 user.language
         language = AccessController.doPrivileged(
             new GetPropertyAction("user.language", "en"));
         // for compatibility, check for old user.region property

@@ -1541,8 +1541,8 @@ public final class String
      * <p>All indices are specified in {@code char} values
      * (Unicode code units).
      *
-     * @param   ch          a character (Unicode code point).
-     * @param   fromIndex   the index to start the search from.
+     * @param   ch          a character (Unicode code point). 要搜索的字符串 unicode 编码
+     * @param   fromIndex   the index to start the search from. 搜索下标起始位置下标
      * @return  the index of the first occurrence of the character in the
      *          character sequence represented by this object that is greater
      *          than or equal to {@code fromIndex}, or {@code -1}
@@ -1556,7 +1556,7 @@ public final class String
             // Note: fromIndex might be near -1>>>1.
             return -1;
         }
-
+        // 判断是否超过 0x00FFFF, 大于 0x00FFFF 的码位都需要使用代理区的码点
         if (ch < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
             // handle most cases here (ch is a BMP code point or a
             // negative value (invalid code point))
@@ -2069,6 +2069,7 @@ public final class String
      * @return  a string derived from this string by replacing every
      *          occurrence of {@code oldChar} with {@code newChar}.
      */
+    // 替换字符串中的某些字符
     public String replace(char oldChar, char newChar) {
         if (oldChar != newChar) {
             int len = value.length;
@@ -2134,6 +2135,8 @@ public final class String
      * @param s the sequence to search for
      * @return true if this string contains {@code s}, false otherwise
      * @since 1.5
+     *
+     * 复用了 {@link String#indexOf(String str)} 函数
      */
     public boolean contains(CharSequence s) {
         return indexOf(s.toString()) > -1;
@@ -2868,14 +2871,16 @@ public final class String
      *          space removed, or this string if it has no leading or
      *          trailing white space.
      */
+    // 去掉字符串首尾空格
     public String trim() {
         int len = value.length;
         int st = 0;
         char[] val = value;    /* avoid getfield opcode */
-
+        // 从数组首地址开始循环,遇到字符 <= ' ' st 自增结束
         while ((st < len) && (val[st] <= ' ')) {
             st++;
         }
+        // 从数组尾开始循环,遇到字符 <= ' ' len 自减结束
         while ((st < len) && (val[len - 1] <= ' ')) {
             len--;
         }

@@ -74,10 +74,12 @@ public final class LocaleUtils {
         return toLowerString(s1).compareTo(toLowerString(s2));
     }
 
+    // Unicode 编码中大写减去 64 就是小写
     static char toUpper(char c) {
         return isLower(c) ? (char)(c - 0x20) : c;
     }
 
+    // 同样的 Unicode 编码中小写加上 64 就是大写
     static char toLower(char c) {
         return isUpper(c) ? (char)(c + 0x20) : c;
     }
