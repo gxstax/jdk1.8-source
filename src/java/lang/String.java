@@ -968,7 +968,7 @@ public final class String
      * @see  #equalsIgnoreCase(String)
      */
     /**
-     * String 类型重写了 Object 中的 equals() 方法，
+     * String 类型重写了 Object 中的 equals() 方法（由原来的对比引用地址，变成了判断字符串是否相同），
      * equals() 方法需要传递一个 Object 类型的参数值，
      * 在比较时会先通过 instanceof 判断是否为 String 类型，
      * 如果不是则会直接返回 false，
@@ -2076,18 +2076,22 @@ public final class String
             int i = -1;
             char[] val = value; /* avoid getfield opcode */
 
+            // 找到第一个待替换字符的下标，后面循环从该下开始
             while (++i < len) {
                 if (val[i] == oldChar) {
                     break;
                 }
             }
+            // 如果 i > len 说明没有需要替换的字符
             if (i < len) {
+                // 首先循环赋值第一个要替换字符下标之前的字符
                 char buf[] = new char[len];
                 for (int j = 0; j < i; j++) {
                     buf[j] = val[j];
                 }
                 while (i < len) {
                     char c = val[i];
+                    // 当字符等于要替换的字符时则替换为新的字符
                     buf[i] = (c == oldChar) ? newChar : c;
                     i++;
                 }
@@ -2335,6 +2339,7 @@ public final class String
      * @since 1.4
      * @spec JSR-51
      */
+    // 把字符串分割并返回字符串数组
     public String[] split(String regex, int limit) {
         /* fastpath if the regex is a
          (1)one-char String and this character is not one of the
@@ -2427,6 +2432,7 @@ public final class String
      * @since 1.4
      * @spec JSR-51
      */
+    // 把字符串分割并返回字符串数组
     public String[] split(String regex) {
         return split(regex, 0);
     }
@@ -2456,6 +2462,7 @@ public final class String
      * @see StringJoiner
      * @since 1.8
      */
+    // 把字符串数组转为字符串
     public static String join(CharSequence delimiter, CharSequence... elements) {
         Objects.requireNonNull(delimiter);
         Objects.requireNonNull(elements);

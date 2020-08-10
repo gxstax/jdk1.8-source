@@ -231,6 +231,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
 
     /**
      * The default initial capacity - MUST be a power of two.
+     *
+     * HashMap 初始化长度,就是整个 HashMap 初始化元素的个数, 数值必须是2的幂次方
      */
     static final int DEFAULT_INITIAL_CAPACITY = 1 << 4; // aka 16
 
@@ -238,11 +240,22 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * The maximum capacity, used if a higher value is implicitly specified
      * by either of the constructors with arguments.
      * MUST be a power of two <= 1<<30.
+     * HashMap 最大长度
      */
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
     /**
      * The load factor used when none specified in constructor.
+     * 默认的加载因子 (扩容因子)
+     * 当 HashMap 中有 16*0.75=12 个元素时，HashMap 就会进行扩容。
+     *
+     * 那加载因子为什么是 0.75 而不是 0.5 或者 1.0 呢？
+     * 这其实是出于容量和性能之间平衡的结果：
+     *
+     * 当加载因子设置比较大的时候，扩容的门槛就被提高了，扩容发生的频率比较低，占用的空间会比较小，
+     * 但此时发生 Hash 冲突的几率就会提升，因此需要更复杂的数据结构来存储元素，这样对元素的操作时间就会增加，运行效率也会因此降低；
+     *
+     * 而当加载因子值比较小的时候，扩容的门槛会比较低，因此会占用更多的空间，此时元素的存储就比较稀疏，发生哈希冲突的可能性就比较小，因此操作性能会比较高。
      */
     static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
@@ -253,6 +266,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * than 2 and should be at least 8 to mesh with assumptions in
      * tree removal about conversion back to plain bins upon
      * shrinkage.
+     * 当链表长度大于此值且容量大于 64 时
+     * （意思就是当一个链表长度大于多少时，这个链表要从链表结构转换成红黑树）
+     * 这里需要注意的时，如果一个 HashMap 的元素小于 64，即使一个链表的长度大于8 也不会触发链表到红黑树的转换
      */
     static final int TREEIFY_THRESHOLD = 8;
 
@@ -260,6 +276,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * The bin count threshold for untreeifying a (split) bin during a
      * resize operation. Should be less than TREEIFY_THRESHOLD, and at
      * most 6 to mesh with shrinkage detection under removal.
+     * 转换链表的临界值，当元素小于此值时，会将红黑树结构转换成链表结构
      */
     static final int UNTREEIFY_THRESHOLD = 6;
 
@@ -268,6 +285,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * (Otherwise the table is resized if too many nodes in a bin.)
      * Should be at least 4 * TREEIFY_THRESHOLD to avoid conflicts
      * between resizing and treeification thresholds.
+     * 最小树容量
      */
     static final int MIN_TREEIFY_CAPACITY = 64;
 
@@ -553,6 +571,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      */
     public V get(Object key) {
         Node<K,V> e;
+        // 对 key 进行哈希操作
         return (e = getNode(hash(key), key)) == null ? null : e.value;
     }
 
@@ -564,16 +583,24 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * @return the node, or null if none
      */
     final Node<K,V> getNode(int hash, Object key) {
-        Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+        Node<K,V>[] tab; // 保存哈希桶局部变量
+        Node<K,V> first, e; // first：缓存第一个元素 e 缓存其它位置元素
+        int n; // 保存数组长度（哈希桶长度）
+        K k; // 缓存节点 key 值的局部变量
+        // 非空判断
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (first = tab[(n - 1) & hash]) != null) {
+            // 判断第一个元素是否是要查询的元素
             if (first.hash == hash && // always check first node
                 ((k = first.key) == key || (key != null && key.equals(k))))
                 return first;
+            // 下一个节点非空判断
             if ((e = first.next) != null) {
+                // 如果第一节点是树（红黑树）结构，则使用 getTreeNode 直接获取相应的数据
                 if (first instanceof TreeNode)
                     return ((TreeNode<K,V>)first).getTreeNode(hash, key);
-                do {
+                do { // 非树结构，循环节点判断
+                    // hash 相等并且 key 相同，则返回此节点（这里注意hashMap 的 key 是可以为 null 的）
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
                         return e;
@@ -608,6 +635,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *         previously associated <tt>null</tt> with <tt>key</tt>.)
      */
     public V put(K key, V value) {
+        // 对 key 值进行 hash 操作
         return putVal(hash(key), key, value, false, true);
     }
 
@@ -623,26 +651,39 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      */
     final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
-        Node<K,V>[] tab; Node<K,V> p; int n, i;
+        Node<K,V>[] tab; // 缓存哈希桶局部变量
+        Node<K,V> p; // 缓存当前哈希表下标节点
+        int n, i; // n: 哈希表长度 i: 当前值在哈希表的下标位置
+        // 哈希表为空则创建表
         if ((tab = table) == null || (n = tab.length) == 0)
             n = (tab = resize()).length;
+
+        // 根据 key 的哈希值计算出要插入的数组索引 i
+        // 这里判断数据下标表达式 （n-1）& hash 只会落在一个 0 到 n-1 的范围内
         if ((p = tab[i = (n - 1) & hash]) == null)
             tab[i] = newNode(hash, key, value, null);
         else {
             Node<K,V> e; K k;
+            // 如果 key 已经存在了，直接覆盖 value
             if (p.hash == hash &&
                 ((k = p.key) == key || (key != null && key.equals(k))))
                 e = p;
+            // 如果 key 不存在，判断是否为红黑树结构
             else if (p instanceof TreeNode)
+                // 红黑树直接插入键值对
                 e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
             else {
+                // 如果为链表结构
                 for (int binCount = 0; ; ++binCount) {
+                    // 如果没有下一个元素，说明哈希桶当前下标是没有元素的，那么直接放到当前下标位置就可以了
                     if ((e = p.next) == null) {
                         p.next = newNode(hash, key, value, null);
+                        // 判断是否需要转换为红黑树结构
                         if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
                             treeifyBin(tab, hash);
                         break;
                     }
+                    // key 已经存在直接覆盖 value
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
                         break;
@@ -658,6 +699,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             }
         }
         ++modCount;
+        // 超过最大容量，扩容
         if (++size > threshold)
             resize();
         afterNodeInsertion(evict);
@@ -670,6 +712,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * Otherwise, because we are using power-of-two expansion, the
      * elements from each bin must either stay at same index, or move
      * with a power of two offset in the new table.
+     * 初始化/扩容哈希桶（表）
      *
      * @return the table
      */

@@ -145,6 +145,7 @@ public class Object {
      * @see     #hashCode()
      * @see     java.util.HashMap
      */
+    // Object 的equals 对比两个对象的引用地址是否相同
     public boolean equals(Object obj) {
         return (this == obj);
     }
