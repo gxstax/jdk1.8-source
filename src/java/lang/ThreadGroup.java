@@ -56,8 +56,13 @@ import sun.misc.VM;
 public
 class ThreadGroup implements Thread.UncaughtExceptionHandler {
     private final ThreadGroup parent;
+
+    // 线程组名称
     String name;
+
+    // 最大优先级
     int maxPriority;
+
     boolean destroyed;
     boolean daemon;
     boolean vmAllowSuspension;

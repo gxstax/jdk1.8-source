@@ -2616,6 +2616,7 @@ public class Collections {
         private static final long serialVersionUID = 1978198479659022715L;
 
         private final Map<K,V> m;     // Backing Map
+        // 用于同步的对象
         final Object      mutex;        // Object on which to synchronize
 
         SynchronizedMap(Map<K,V> m) {

@@ -350,6 +350,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * cheapest possible way to reduce systematic lossage, as well as
      * to incorporate impact of the highest bits that would otherwise
      * never be used in index calculations because of table bounds.
+     * 这里向右移动16位，是把高位的散列集转移到地位，
+     * 因为平方次计算大多数会在高位比较散列，这样做也是尽可能减少 hash 冲突
      */
     static final int hash(Object key) {
         int h;

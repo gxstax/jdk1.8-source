@@ -507,12 +507,14 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * bounds for power of two table sizes, and is further required
      * because the top two bits of 32bit hash fields are used for
      * control purposes.
+     * 数组最大值（高2位用于控制）
      */
     private static final int MAXIMUM_CAPACITY = 1 << 30;
 
     /**
      * The default initial table capacity.  Must be a power of 2
      * (i.e., at least 1) and at most MAXIMUM_CAPACITY.
+     * 默认长度是 16
      */
     private static final int DEFAULT_CAPACITY = 16;
 
@@ -534,6 +536,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * actual floating point value isn't normally used -- it is
      * simpler to use expressions such as {@code n - (n >>> 2)} for
      * the associated resizing threshold.
+     * 扩展因子
      */
     private static final float LOAD_FACTOR = 0.75f;
 
@@ -544,6 +547,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * than 2, and should be at least 8 to mesh with assumptions in
      * tree removal about conversion back to plain bins upon
      * shrinkage.
+     * 列表转红黑树大小阈值
      */
     static final int TREEIFY_THRESHOLD = 8;
 

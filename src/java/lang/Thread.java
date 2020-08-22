@@ -240,19 +240,32 @@ class Thread implements Runnable {
             blocker = b;
         }
     }
-
+    
+    /**
+     * 线程的优先级可以理解为线程抢占 CPU 时间片的概率，
+     * 优先级越高的线程优先执行的概率就越大，但并不能保证优先级高的线程一定先执行。
+     */
     /**
      * The minimum priority that a thread can have.
+     */
+    /**
+     * 线程可以拥有的最小优先级
      */
     public final static int MIN_PRIORITY = 1;
 
    /**
      * The default priority that is assigned to a thread.
      */
+   /**
+    * 线程默认的优先级
+    */
     public final static int NORM_PRIORITY = 5;
 
     /**
      * The maximum priority that a thread can have.
+     */
+    /**
+     * 线程可以拥有的最大优先级
      */
     public final static int MAX_PRIORITY = 10;
 
@@ -700,16 +713,20 @@ class Thread implements Runnable {
          *
          * A zero status value corresponds to state "NEW".
          */
+        // 判断线程的状态是不是 0 也就是 "NEW" 状态
         if (threadStatus != 0)
             throw new IllegalThreadStateException();
 
         /* Notify the group that this thread is about to be started
          * so that it can be added to the group's list of threads
          * and the group's unstarted count can be decremented. */
+        // 通知线程组，该线程将要启动，所以会吧该线程添加到线程组，
+        // 同时为线程的未启动计数也会相应增加
         group.add(this);
 
         boolean started = false;
         try {
+            // start0() 是一个本地方法
             start0();
             started = true;
         } finally {
@@ -720,6 +737,7 @@ class Thread implements Runnable {
             } catch (Throwable ignore) {
                 /* do nothing. If start0 threw a Throwable then
                   it will be passed up the call stack */
+                // 不做任何处理，如果 start0(); 方法跑出异常，那么它将会被传递到调用栈
             }
         }
     }
@@ -737,6 +755,8 @@ class Thread implements Runnable {
      * @see     #start()
      * @see     #stop()
      * @see     #Thread(ThreadGroup, Runnable, String)
+     * run() 方法只是一个普通的方法，这里 target 就是一个继承了Runable的类，
+     * 然后 Thread 组合进来这个类，调用run() 其实就是调用实现了 Runable 的实体的run() 方法（业务方法）
      */
     @Override
     public void run() {
@@ -1078,13 +1098,17 @@ class Thread implements Runnable {
      * @see        #MIN_PRIORITY
      * @see        ThreadGroup#getMaxPriority()
      */
+
     public final void setPriority(int newPriority) {
         ThreadGroup g;
         checkAccess();
+
+        // 验证线程优先级的合理性
         if (newPriority > MAX_PRIORITY || newPriority < MIN_PRIORITY) {
             throw new IllegalArgumentException();
         }
         if((g = getThreadGroup()) != null) {
+            // 优先级如果超过线程组的最高优先级，则把最高优先级设置为线程组的最高优先级
             if (newPriority > g.getMaxPriority()) {
                 newPriority = g.getMaxPriority();
             }
@@ -1235,15 +1259,19 @@ class Thread implements Runnable {
         long base = System.currentTimeMillis();
         long now = 0;
 
+        // 超时时间不能小于 0
         if (millis < 0) {
             throw new IllegalArgumentException("timeout value is negative");
         }
 
+        // 等于 0 表示无限等待，直到线程执行完为之
         if (millis == 0) {
+            // 判断子线程 (其他线程) 为活跃线程，则一直等待
             while (isAlive()) {
                 wait(0);
             }
         } else {
+            // 循环判断，当等待时间超过设定时间就退出
             while (isAlive()) {
                 long delay = millis - now;
                 if (delay <= 0) {
@@ -1735,6 +1763,9 @@ class Thread implements Runnable {
         /**
          * Thread state for a thread which has not yet started.
          */
+        /**
+         * 新建状态，线程被创建出来，但尚未启动时的线程状态
+         */
         NEW,
 
         /**
@@ -1742,6 +1773,9 @@ class Thread implements Runnable {
          * state is executing in the Java virtual machine but it may
          * be waiting for other resources from the operating system
          * such as processor.
+         */
+        /**
+         * 就绪状态，表示可以运行的线程状态，但它在排队等待来自操作系统的 CPU 资源
          */
         RUNNABLE,
 
@@ -1751,6 +1785,10 @@ class Thread implements Runnable {
          * to enter a synchronized block/method or
          * reenter a synchronized block/method after calling
          * {@link Object#wait() Object.wait}.
+         */
+        /**
+         * 阻塞等待锁的线程状态，表示正处于阻塞状态的线程正在等待监视器锁，
+         * 比如等待执行 synchronized 代码块或者使用 synchronized 标记的方法
          */
         BLOCKED,
 
@@ -1773,6 +1811,10 @@ class Thread implements Runnable {
          * that object. A thread that has called <tt>Thread.join()</tt>
          * is waiting for a specified thread to terminate.
          */
+        /**
+         * 等待状态，一个处于等待状态的线程正在等待另一个线程执行某个特定的动作。
+         * 例如，一个线程调用了 Object.wait() 它在等待另一个线程调用 Object.notify() 或 Object.notifyAll()
+         */
         WAITING,
 
         /**
@@ -1787,11 +1829,19 @@ class Thread implements Runnable {
          *   <li>{@link LockSupport#parkUntil LockSupport.parkUntil}</li>
          * </ul>
          */
+        /**
+         * 计时等待状态，和等待状态（WAITING）类似，只是多了超时时间，比如
+         * 调用了有超时时间设置的方法 {@link Object#wait(long)} 和 {@link Thread#join(long)}
+         * 就会进入到此状态
+         */
         TIMED_WAITING,
 
         /**
          * Thread state for a terminated thread.
          * The thread has completed execution.
+         */
+        /**
+         * 终止状态，表示线程已经完成
          */
         TERMINATED;
     }
